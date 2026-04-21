@@ -1,13 +1,13 @@
-import { useMemo, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
 import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import type { Branch } from "@shared/types";
 import { BranchContextMenu } from "./BranchContextMenu";
-import { BranchCreateDialog } from "./BranchCreateDialog";
 import { MergeRebaseDialog } from "./MergeRebaseDialog";
 import { Prompt } from "../ui/Prompt";
 import { PRCreateDialog } from "../github/PRCreateDialog";
+import { FolderIcon, FolderOpenIcon, PullIcon } from "../ui/Icons";
 import {
   buildBranchTree,
   countBranches,
@@ -15,12 +15,30 @@ import {
   type BranchTreeNode,
 } from "../../lib/branch-tree";
 
-export function BranchList({ filter }: { filter: string }) {
+type Kind = "local" | "remote";
+
+// Imperative methods exposed through a forwarded ref so the sidebar
+// section header (which owns the "collapse all" / "expand all" buttons)
+// can reach into the tree state without lifting it completely.
+export interface BranchListHandle {
+  collapseAll: () => void;
+  expandAll: () => void;
+}
+
+interface Props {
+  filter: string;
+  kind?: Kind;
+}
+
+// Shared tree renderer — used by both LOCAL and REMOTE sidebar sections.
+export const BranchList = forwardRef<BranchListHandle, Props>(function BranchList(
+  { filter, kind = "local" },
+  ref,
+) {
   const branches = useActive("branches") ?? [];
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const [menu, setMenu] = useState<{ x: number; y: number; branch: Branch } | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
   const [mergeDialog, setMergeDialog] =
     useState<{ kind: "merge" | "rebase"; source: string } | null>(null);
   const [renaming, setRenaming] = useState<Branch | null>(null);
@@ -33,22 +51,22 @@ export function BranchList({ filter }: { filter: string }) {
 
   const filterLC = filter.trim().toLowerCase();
 
-  const { localTree, remoteTree, localCount, remoteCount, allFolderPaths } = useMemo(() => {
-    const locals = branches.filter((b) => b.isLocal);
-    const remotes = branches.filter((b) => b.isRemote);
-    const lt = buildBranchTree(locals);
-    const rt = buildBranchTree(remotes);
+  const { tree, allFolderPaths, total } = useMemo(() => {
+    const pool = branches.filter((b) => (kind === "local" ? b.isLocal : b.isRemote));
+    const t = buildBranchTree(pool);
     const paths: string[] = [];
-    collectFolderPaths(lt, paths);
-    collectFolderPaths(rt, paths);
-    return {
-      localTree: lt,
-      remoteTree: rt,
-      localCount: locals.length,
-      remoteCount: remotes.length,
-      allFolderPaths: paths,
-    };
-  }, [branches]);
+    collectFolderPaths(t, paths);
+    return { tree: t, allFolderPaths: paths, total: pool.length };
+  }, [branches, kind]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      collapseAll: () => setCollapsed(new Set(allFolderPaths)),
+      expandAll: () => setCollapsed(new Set()),
+    }),
+    [allFolderPaths],
+  );
 
   async function checkout(name: string) {
     try {
@@ -95,66 +113,30 @@ export function BranchList({ filter }: { filter: string }) {
     });
   };
 
-  const expandAll = () => setCollapsed(new Set());
-  const collapseAll = () => setCollapsed(new Set(allFolderPaths));
-
   return (
-    <div className="p-1">
-      <div className="flex items-center gap-1 px-2 py-1 text-xs">
-        <button
-          onClick={expandAll}
-          className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
-          title="Expand all folders"
-        >
-          ⤢
-        </button>
-        <button
-          onClick={collapseAll}
-          className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
-          title="Collapse all folders"
-        >
-          ⤡
-        </button>
-        <div className="flex-1" />
-        <button
-          onClick={() => setShowCreate(true)}
-          className="text-indigo-400 hover:text-indigo-300"
-        >
-          + New
-        </button>
-      </div>
-
-      <SectionHeader label="Local" count={localCount} />
-      <TreeRenderer
-        node={localTree}
-        depth={0}
-        filterLC={filterLC}
-        collapsed={collapsed}
-        toggleFolder={toggleFolder}
-        onCheckout={checkout}
-        onPull={pullBranch}
-        pulling={pulling}
-        onContextMenu={(e, branch) => {
-          e.preventDefault();
-          setMenu({ x: e.clientX, y: e.clientY, branch });
-        }}
-      />
-
-      <SectionHeader label="Remote" count={remoteCount} />
-      <TreeRenderer
-        node={remoteTree}
-        depth={0}
-        filterLC={filterLC}
-        collapsed={collapsed}
-        toggleFolder={toggleFolder}
-        onCheckout={checkout}
-        onPull={pullBranch}
-        pulling={pulling}
-        onContextMenu={(e, branch) => {
-          e.preventDefault();
-          setMenu({ x: e.clientX, y: e.clientY, branch });
-        }}
-      />
+    <div>
+      {total === 0 ? (
+        <div className="px-3 py-3 text-xs text-neutral-500">
+          {kind === "remote"
+            ? "No remotes configured. Add one with git remote add, then Fetch."
+            : "No local branches yet."}
+        </div>
+      ) : (
+        <TreeRenderer
+          node={tree}
+          depth={0}
+          filterLC={filterLC}
+          collapsed={collapsed}
+          toggleFolder={toggleFolder}
+          onCheckout={checkout}
+          onPull={pullBranch}
+          pulling={pulling}
+          onContextMenu={(e, branch) => {
+            e.preventDefault();
+            setMenu({ x: e.clientX, y: e.clientY, branch });
+          }}
+        />
+      )}
 
       {menu && (
         <BranchContextMenu
@@ -168,7 +150,6 @@ export function BranchList({ filter }: { filter: string }) {
           onOpenPR={(b) => setPrHead(b.name)}
         />
       )}
-      {showCreate && <BranchCreateDialog onClose={() => setShowCreate(false)} />}
       {mergeDialog && (
         <MergeRebaseDialog
           kind={mergeDialog.kind}
@@ -186,20 +167,10 @@ export function BranchList({ filter }: { filter: string }) {
           onCancel={() => setRenaming(null)}
         />
       )}
-      {prHead && (
-        <PRCreateDialog headBranch={prHead} onClose={() => setPrHead(null)} />
-      )}
+      {prHead && <PRCreateDialog headBranch={prHead} onClose={() => setPrHead(null)} />}
     </div>
   );
-}
-
-function SectionHeader({ label, count }: { label: string; count: number }) {
-  return (
-    <div className="mt-1 px-2 py-1 text-xs uppercase tracking-wide text-neutral-500">
-      {label} ({count})
-    </div>
-  );
-}
+});
 
 interface TreeRendererProps {
   node: BranchTreeNode;
@@ -214,19 +185,17 @@ interface TreeRendererProps {
 }
 
 function TreeRenderer(props: TreeRendererProps) {
-  const { node, depth, filterLC, collapsed, toggleFolder, onCheckout, onPull, pulling, onContextMenu } = props;
+  const { node, depth, filterLC, collapsed, toggleFolder, onCheckout, onPull, pulling, onContextMenu } =
+    props;
 
   return (
     <>
       {node.children.map((child) => {
-        // Hide subtrees that don't match the filter at all.
         if (filterLC && !matchesFilter(child, filterLC)) return null;
 
         const hasChildren = child.children.length > 0;
         const hasBranch = child.branch !== null;
         const folderPath = child.fullPath;
-        // Always respect user's explicit collapse — even during filter. User
-        // can collapse a matching folder to hide clutter and still type filter.
         const isExpanded = !collapsed.has(folderPath);
 
         if (hasChildren) {
@@ -259,7 +228,6 @@ function TreeRenderer(props: TreeRendererProps) {
           );
         }
 
-        // Pure leaf.
         if (hasBranch && child.branch) {
           if (filterLC && !child.branch.name.toLowerCase().includes(filterLC)) return null;
           return (
@@ -303,7 +271,11 @@ function FolderRow({
       <span className="mr-1 w-3 text-center text-[10px] text-neutral-500">
         {expanded ? "▾" : "▸"}
       </span>
-      <FolderIcon />
+      {expanded ? (
+        <FolderOpenIcon className="size-3.5 shrink-0 text-neutral-500" />
+      ) : (
+        <FolderIcon className="size-3.5 shrink-0 text-neutral-500" />
+      )}
       <span className="ml-1.5 min-w-0 flex-1 truncate">{name}</span>
       <span className="ml-2 shrink-0 text-[10px] text-neutral-600">{count}</span>
     </div>
@@ -327,8 +299,7 @@ function BranchRow({
   onContextMenu?: (e: React.MouseEvent) => void;
   onPull?: () => void;
 }) {
-  // Pull only makes sense for local branches that have an upstream; remote
-  // tracking branches don't have one to pull from.
+  const setHovered = useUI((s) => s.setHoveredBranch);
   const canPull = branch.isLocal && !!branch.tracking;
   const isPulling = pulling === branch.name;
   const behind = branch.behind ?? 0;
@@ -338,15 +309,23 @@ function BranchRow({
     <div
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
+      onMouseEnter={() => setHovered(branch.name)}
+      onMouseLeave={() => setHovered(null)}
       className={`group flex items-center justify-between rounded py-1 pr-2 text-sm hover:bg-neutral-800 ${
-        branch.isHead ? "bg-neutral-800" : ""
+        branch.isHead ? "bg-indigo-500/10" : ""
       }`}
-      style={{ paddingLeft: 8 + depth * 12 + 16 /* align with folder icon */ }}
+      style={{ paddingLeft: 8 + depth * 12 + 16 }}
       title={branch.fullName}
     >
       <div className="flex min-w-0 flex-1 items-center">
-        {branch.isHead && <span className="mr-1.5 text-indigo-400">●</span>}
-        <span className="truncate">{label}</span>
+        {branch.isHead && (
+          <span className="mr-1.5 inline-block size-1.5 shrink-0 rounded-full bg-indigo-400" />
+        )}
+        <span
+          className={`truncate ${branch.isHead ? "font-medium text-neutral-100" : "text-neutral-300"}`}
+        >
+          {label}
+        </span>
       </div>
       <div className="ml-2 flex shrink-0 items-center gap-1 text-[10px] text-neutral-500">
         {ahead > 0 && <span className="text-emerald-400">↑{ahead}</span>}
@@ -363,41 +342,11 @@ function BranchRow({
               behind > 0 ? "text-amber-400 opacity-100" : "opacity-0 group-hover:opacity-100"
             }`}
           >
-            <PullIcon spin={isPulling} />
+            <PullIcon className={`size-3 ${isPulling ? "animate-spin" : ""}`} />
           </button>
         )}
       </div>
     </div>
-  );
-}
-
-function FolderIcon() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      className="h-3.5 w-3.5 shrink-0 text-neutral-500"
-      fill="currentColor"
-      aria-hidden
-    >
-      <path d="M1.75 2A1.75 1.75 0 0 0 0 3.75v8.5C0 13.216.784 14 1.75 14h12.5A1.75 1.75 0 0 0 16 12.25v-7A1.75 1.75 0 0 0 14.25 3.5H8.31a.75.75 0 0 1-.53-.22L6.56 2.06A1.75 1.75 0 0 0 5.32 1.5H1.75Z" />
-    </svg>
-  );
-}
-
-function PullIcon({ spin }: { spin: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      className={`h-3.5 w-3.5 ${spin ? "animate-spin" : ""}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M8 2v9m0 0-3-3m3 3 3-3M3 14h10" />
-    </svg>
   );
 }
 

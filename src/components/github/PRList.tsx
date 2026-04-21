@@ -46,7 +46,11 @@ export function PRList({ filter }: { filter: string }) {
         ))}
       </div>
       {prs.length === 0 ? (
-        <div className="p-3 text-xs text-neutral-500">No {stateFilter} pull requests</div>
+        <div className="p-3 text-xs text-neutral-500">
+          {stateFilter === "all"
+            ? "No pull requests"
+            : `No ${stateFilter} pull requests`}
+        </div>
       ) : (
         <ul className="p-1">
           {filtered.map((p) => (
