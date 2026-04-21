@@ -171,8 +171,14 @@ export const useRepo = create<RepoState>((set, get) => ({
     if (ui.selectedStash != null) ui.selectStash(null);
     if (ui.selectedCommitFile != null) ui.selectCommitFile(null);
     if (ui.selectedWipFile != null) ui.selectWipFile(null);
-    if (ui.view === "pr-detail" || ui.view === "merge") ui.setView("graph");
+    // Any tab-scoped view (pr-detail, merge, remotes) should fall back to
+    // the history graph on switch. Settings is app-wide so we leave it alone.
+    if (ui.view !== "graph" && ui.view !== "settings") ui.setView("graph");
     queueSessionWrite(get());
+    // Background refresh after switching so stale cached data gets updated.
+    // This is awaited only implicitly — the tab becomes active immediately
+    // with whatever we have, and new data streams in as git replies.
+    void get().refreshAll(tab.path);
   },
 
   patchTab: (path, patch) => {

@@ -1,8 +1,6 @@
 import { useActiveTabShallow } from "../../stores/repo";
-import { useEffect, useState } from "react";
-import { unwrap } from "../../lib/ipc";
-import { useUI } from "../../stores/ui";
-import { BranchIcon, FetchIcon } from "../ui/Icons";
+import { useMemo } from "react";
+import { BranchIcon } from "../ui/Icons";
 import type { PullRequest } from "@shared/types";
 
 export function StatusBar() {
@@ -12,16 +10,6 @@ export function StatusBar() {
     ghAvailable: t?.ghAvailable ?? false,
     prs: t?.prs ?? [],
   }));
-  const toast = useUI((s) => s.toast);
-  const [fetching, setFetching] = useState(false);
-
-  // Light pulse while an auto-fetch is in progress. We don't have a direct
-  // signal for that today — hook into the manual fetch button UX here.
-  useEffect(() => {
-    if (!fetching) return;
-    const t = setTimeout(() => setFetching(false), 1200);
-    return () => clearTimeout(t);
-  }, [fetching]);
 
   if (!status) {
     return (
@@ -41,14 +29,11 @@ export function StatusBar() {
           {status.branch ?? "detached"}
         </span>
         {status.tracking && (
-          <span>
-            {status.ahead > 0 && <span className="text-emerald-400">↑{status.ahead}</span>}{" "}
-            {status.behind > 0 && <span className="text-amber-400">↓{status.behind}</span>}
-            {status.ahead === 0 && status.behind === 0 && <span>in sync</span>}
-          </span>
-        )}
-        {behindRemote > 0 && (
-          <span className="text-amber-400">{behindRemote} new commits on remote</span>
+          <TrackingBadge
+            ahead={status.ahead}
+            behind={status.behind}
+            behindRemote={behindRemote}
+          />
         )}
         {ghAvailable && ciDot && (
           <span className="flex items-center gap-1.5">
@@ -63,23 +48,39 @@ export function StatusBar() {
             {status.mergeInProgress ? "MERGING" : "REBASING"}
           </span>
         )}
-        <button
-          className="flex items-center gap-1 hover:text-neutral-100"
-          onClick={async () => {
-            setFetching(true);
-            try {
-              await unwrap(window.gitApi.fetch({ all: true, prune: true }));
-              toast("success", "Fetched");
-            } catch (e) {
-              toast("error", e instanceof Error ? e.message : String(e));
-            }
-          }}
-        >
-          <FetchIcon className={`size-3 ${fetching ? "animate-pulse" : ""}`} />
-          {fetching ? "Fetching…" : "Refresh"}
-        </button>
       </div>
     </div>
+  );
+}
+
+function TrackingBadge({
+  ahead,
+  behind,
+  behindRemote,
+}: {
+  ahead: number;
+  behind: number;
+  behindRemote: number;
+}) {
+  // Auto-fetch reports a fresher behind count than `git status`, which
+  // only updates on a status refresh. Prefer it when available.
+  const behindCount = useMemo(
+    () => (behindRemote > 0 ? behindRemote : behind),
+    [behindRemote, behind],
+  );
+  if (ahead === 0 && behindCount === 0) return <span>in sync</span>;
+  return (
+    <span>
+      {ahead > 0 && <span className="text-emerald-400">↑{ahead}</span>}{" "}
+      {behindCount > 0 && (
+        <span
+          className="text-amber-400"
+          title={`${behindCount} new commit${behindCount === 1 ? "" : "s"} on remote`}
+        >
+          ↓{behindCount}
+        </span>
+      )}
+    </span>
   );
 }
 

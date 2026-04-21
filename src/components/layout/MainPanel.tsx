@@ -1,5 +1,5 @@
 import { useUI } from "../../stores/ui";
-import { useActive } from "../../stores/repo";
+import { useActive, useActiveTab } from "../../stores/repo";
 import { BranchGraph } from "../graph/BranchGraph";
 import { RemotesPanel } from "../remotes/RemotesPanel";
 import { SettingsPanel } from "../settings/SettingsPanel";
@@ -13,6 +13,7 @@ export function MainPanel() {
   const status = useActive("status") ?? null;
   const loading = useActive("loading") ?? false;
   const commits = useActive("commits") ?? [];
+  const activeTab = useActiveTab();
   const inConflict = (status?.conflicted.length ?? 0) > 0;
 
   // Render a loader only on the initial repo open when we don't have any
@@ -27,7 +28,10 @@ export function MainPanel() {
           <RepoLoading />
         ) : (
           <>
-            {view === "graph" && <BranchGraph />}
+            {/* Keying BranchGraph on the repo path remounts its virtualized
+                scroll state + memoized layout when the active tab switches,
+                so the history view always reflects the current tab. */}
+            {view === "graph" && <BranchGraph key={activeTab?.path ?? "none"} />}
             {view === "remotes" && <RemotesPanel />}
             {view === "settings" && <SettingsPanel />}
             {view === "pr-detail" && <PRDetail />}

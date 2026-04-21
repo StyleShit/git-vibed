@@ -19,6 +19,7 @@ import {
   PlusIcon,
 } from "../ui/Icons";
 import { BranchCreateDialog } from "../branches/BranchCreateDialog";
+import { useConfirm } from "../ui/Confirm";
 
 type PullStrategy = "merge" | "rebase" | "ff-only";
 
@@ -33,6 +34,7 @@ export function Toolbar() {
   const toast = useUI((s) => s.toast);
   const setCommandPalette = useUI((s) => s.setCommandPalette);
   const refreshAll = useRepo((s) => s.refreshAll);
+  const confirmDialog = useConfirm();
   const defaultStrategy = useSettings((s) => s.defaultPullStrategy);
   const [busy, setBusy] = useState<"pull" | "push" | "fetch" | "stash" | "pop" | null>(null);
   const [pullMenuOpen, setPullMenuOpen] = useState(false);
@@ -61,7 +63,17 @@ export function Toolbar() {
   async function runPush(force = false) {
     setPushMenuOpen(false);
     if (!currentBranch) return;
-    if (force && !confirm("Force push? This can overwrite remote history.")) return;
+    if (
+      force &&
+      !(await confirmDialog({
+        title: "Force push",
+        message: "Force push? This can overwrite remote history.",
+        confirmLabel: "Force push",
+        danger: true,
+      }))
+    ) {
+      return;
+    }
     setBusy("push");
     try {
       await unwrap(
@@ -486,13 +498,17 @@ function SplitButton({
   children: React.ReactNode;
 }) {
   const title = hint ? `${label} (${hint})` : label;
+  // Wrap the two halves in a shared `group` so hovering either side lights
+  // the whole pill up at once. Previously each half had its own
+  // `hover:bg-*` and the gap between them (and their rounded-l/rounded-r
+  // edges) produced a visible seam that looked like a rendering bug.
   return (
-    <div className="relative flex items-center">
+    <div className="group/split relative flex items-stretch rounded hover:bg-neutral-800">
       <button
         onClick={onClick}
         disabled={disabled}
         title={title}
-        className="flex min-w-[56px] flex-col items-center rounded-l px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex min-w-[56px] flex-col items-center rounded-l px-2 py-1 text-[10px] text-neutral-300 group-hover/split:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <div className="relative">
           {icon}
@@ -507,7 +523,7 @@ function SplitButton({
       <button
         onClick={onToggleMenu}
         disabled={disabled}
-        className="rounded-r px-1 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex items-center rounded-r px-1 py-1 text-neutral-400 group-hover/split:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <ChevronDownIcon className="size-3" />
       </button>
