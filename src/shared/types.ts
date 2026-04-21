@@ -65,6 +65,40 @@ export interface Remote {
   pushUrl: string;
 }
 
+export interface Stash {
+  index: number;
+  ref: string;
+  branch: string | null;
+  message: string;
+  timestamp: number;
+}
+
+export interface Tag {
+  name: string;
+  commit: string;
+  message?: string;
+  annotated: boolean;
+}
+
+export interface Worktree {
+  path: string;
+  branch: string | null;
+  commit: string;
+  isMain: boolean;
+  isBare: boolean;
+  isDetached: boolean;
+  isLocked: boolean;
+  lockReason?: string;
+}
+
+export interface CommitFile {
+  path: string;
+  oldPath?: string;
+  status: FileStatus;
+  added: number;
+  removed: number;
+}
+
 export interface DiffHunk {
   oldStart: number;
   oldLines: number;

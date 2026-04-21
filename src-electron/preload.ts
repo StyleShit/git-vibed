@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import { GIT, GH, EVENTS } from "../src/shared/ipc.js";
 import type {
   CommitOptions,
+  CommitFile,
   FetchOptions,
   LogOptions,
   PullOptions,
@@ -20,6 +21,9 @@ import type {
   Check,
   RepoChangedEvent,
   FetchCompleteEvent,
+  Stash,
+  Tag,
+  Worktree,
 } from "../src/shared/types.js";
 
 // Helper wraps the invoke call so callers always get a typed Result<T>.
@@ -95,6 +99,27 @@ const gitApi = {
 
   fileAtRef: (ref: string, filePath: string) =>
     invoke<string>(GIT.FILE_AT_REF, { ref, path: filePath }),
+
+  stashList: () => invoke<Stash[]>(GIT.STASH_LIST),
+  stashApply: (index: number) => invoke<void>(GIT.STASH_APPLY, index),
+  stashDrop: (index: number) => invoke<void>(GIT.STASH_DROP, index),
+  stashShow: (index: number) => invoke<string>(GIT.STASH_SHOW, index),
+
+  tags: () => invoke<Tag[]>(GIT.TAGS),
+  tagCreate: (name: string, ref: string, message?: string) =>
+    invoke<void>(GIT.TAG_CREATE, { name, ref, message }),
+  tagDelete: (name: string) => invoke<void>(GIT.TAG_DELETE, name),
+
+  worktreeList: () => invoke<Worktree[]>(GIT.WORKTREE_LIST),
+  worktreeAdd: (path: string, branch: string, createBranch?: boolean) =>
+    invoke<void>(GIT.WORKTREE_ADD, { path, branch, createBranch }),
+  worktreeRemove: (path: string, force?: boolean) =>
+    invoke<void>(GIT.WORKTREE_REMOVE, { path, force }),
+  worktreeLock: (path: string, reason?: string) =>
+    invoke<void>(GIT.WORKTREE_LOCK, { path, reason }),
+  worktreeUnlock: (path: string) => invoke<void>(GIT.WORKTREE_UNLOCK, path),
+
+  commitFiles: (hash: string) => invoke<CommitFile[]>(GIT.COMMIT_FILES, hash),
 
   onRepoChanged: (cb: (e: RepoChangedEvent) => void) => {
     const handler = (_: unknown, payload: RepoChangedEvent) => cb(payload);

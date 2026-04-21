@@ -5,6 +5,7 @@ import path from "node:path";
 import fs from "node:fs";
 import type {
   Branch,
+  CommitFile,
   CommitOptions,
   ConfigEntry,
   FetchOptions,
@@ -14,6 +15,9 @@ import type {
   Remote,
   RepoStatus,
   FileStatus,
+  Stash,
+  Tag,
+  Worktree,
 } from "../../src/shared/types.js";
 import { parseGitLog } from "./parser.js";
 
@@ -308,6 +312,240 @@ export class GitExecutor {
     await this.git.raw(["stash", "pop"]);
   }
 
+  // `git stash list` returns entries like:
+  //   stash@{0}: WIP on main: abc1234 Subject
+  //   stash@{1}: On feature: custom message
+  // Using a custom --format so we can parse author date reliably.
+  async stashList(): Promise<Stash[]> {
+    try {
+      const raw = await this.git.raw([
+        "stash",
+        "list",
+        "--format=%gd%x01%ct%x01%gs",
+      ]);
+      const out: Stash[] = [];
+      for (const line of raw.split("\n")) {
+        if (!line) continue;
+        const [ref, ts, msg] = line.split("\x01");
+        if (!ref) continue;
+        const m = /stash@\{(\d+)\}/.exec(ref);
+        const index = m ? Number(m[1]) : 0;
+        // Subject forms: "WIP on <branch>: <hash> <subject>" or "On <branch>: <message>".
+        const branchMatch = /^(?:WIP )?[Oo]n ([^:]+):/.exec(msg ?? "");
+        out.push({
+          index,
+          ref,
+          branch: branchMatch?.[1] ?? null,
+          message: msg ?? "",
+          timestamp: Number(ts) || 0,
+        });
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
+  async stashApply(index: number): Promise<void> {
+    await this.git.raw(["stash", "apply", `stash@{${index}}`]);
+  }
+
+  async stashDrop(index: number): Promise<void> {
+    await this.git.raw(["stash", "drop", `stash@{${index}}`]);
+  }
+
+  async stashShow(index: number): Promise<string> {
+    try {
+      return await this.git.raw(["stash", "show", "-p", `stash@{${index}}`]);
+    } catch {
+      return "";
+    }
+  }
+
+  // ---- Tags --------------------------------------------------------------
+
+  async tags(): Promise<Tag[]> {
+    try {
+      // type=commit for lightweight, type=tag for annotated. We grab both and
+      // the subject for annotated tags (empty for lightweight).
+      const raw = await this.git.raw([
+        "for-each-ref",
+        "--format=%(refname:short)%x01%(objectname)%x01%(objecttype)%x01%(subject)",
+        "refs/tags",
+      ]);
+      const out: Tag[] = [];
+      for (const line of raw.split("\n")) {
+        if (!line) continue;
+        const [name, commit, type, subject] = line.split("\x01");
+        // Git should always emit all four fields; skip anything it didn't so
+        // the renderer never has to defend against undefined commit ids.
+        if (!name || !commit) continue;
+        out.push({
+          name,
+          commit,
+          message: subject || undefined,
+          annotated: type === "tag",
+        });
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
+  async tagCreate(name: string, ref: string, message?: string): Promise<void> {
+    const args = ["tag"];
+    if (message) args.push("-a", name, "-m", message, ref);
+    else args.push(name, ref);
+    await this.git.raw(args);
+  }
+
+  async tagDelete(name: string): Promise<void> {
+    await this.git.raw(["tag", "-d", name]);
+  }
+
+  // ---- Worktrees ---------------------------------------------------------
+
+  async worktrees(): Promise<Worktree[]> {
+    try {
+      const raw = await this.git.raw(["worktree", "list", "--porcelain"]);
+      const out: Worktree[] = [];
+      let current: Partial<Worktree> | null = null;
+      const flush = () => {
+        if (current && current.path) {
+          out.push({
+            path: current.path,
+            branch: current.branch ?? null,
+            commit: current.commit ?? "",
+            isMain: out.length === 0,
+            isBare: current.isBare ?? false,
+            isDetached: current.isDetached ?? false,
+            isLocked: current.isLocked ?? false,
+            lockReason: current.lockReason,
+          });
+        }
+        current = null;
+      };
+      for (const line of raw.split("\n")) {
+        if (!line) {
+          flush();
+          continue;
+        }
+        if (line.startsWith("worktree ")) {
+          flush();
+          current = { path: line.slice("worktree ".length) };
+        } else if (current) {
+          if (line.startsWith("HEAD ")) current.commit = line.slice(5);
+          else if (line.startsWith("branch ")) current.branch = line.slice(7).replace(/^refs\/heads\//, "");
+          else if (line === "detached") current.isDetached = true;
+          else if (line === "bare") current.isBare = true;
+          else if (line.startsWith("locked")) {
+            current.isLocked = true;
+            const reason = line.slice("locked".length).trim();
+            if (reason) current.lockReason = reason;
+          }
+        }
+      }
+      flush();
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
+  async worktreeAdd(worktreePath: string, branch: string, createBranch = false): Promise<void> {
+    const args = ["worktree", "add"];
+    if (createBranch) args.push("-b", branch, worktreePath);
+    else args.push(worktreePath, branch);
+    await this.git.raw(args);
+  }
+
+  async worktreeRemove(worktreePath: string, force = false): Promise<void> {
+    const args = ["worktree", "remove"];
+    if (force) args.push("--force");
+    args.push(worktreePath);
+    await this.git.raw(args);
+  }
+
+  async worktreeLock(worktreePath: string, reason?: string): Promise<void> {
+    const args = ["worktree", "lock"];
+    if (reason) args.push("--reason", reason);
+    args.push(worktreePath);
+    await this.git.raw(args);
+  }
+
+  async worktreeUnlock(worktreePath: string): Promise<void> {
+    await this.git.raw(["worktree", "unlock", worktreePath]);
+  }
+
+  // Per-file numstat + status for a commit. Used by the CommitDetail panel
+  // to show "2 modified + 1 added" breakdown plus per-file adds/removes.
+  async commitFiles(hash: string): Promise<CommitFile[]> {
+    try {
+      // `show` with name-status gives status (M/A/D/R…); numstat gives the
+      // add/remove counts. Running them together keeps things in sync.
+      const raw = await this.git.raw([
+        "show",
+        "--format=",
+        "--name-status",
+        "--numstat",
+        "-z", // NUL-delimited so filenames with spaces/newlines work.
+        hash,
+      ]);
+      const parts = raw.split("\0").filter((x) => x.length > 0);
+      // The -z output interleaves name-status then numstat for the same file,
+      // but git emits them in two blocks separated implicitly. Parse by
+      // distinguishing tab-count: name-status lines are "S\tpath" (or
+      // "R<score>\told\tnew"); numstat lines are "add\trem\tpath".
+      const statusByPath = new Map<string, FileStatus>();
+      const oldByPath = new Map<string, string>();
+      const numByPath = new Map<string, { a: number; r: number }>();
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        // numstat has a leading digit or '-' (binary), name-status has a letter.
+        if (/^[0-9-]+\t[0-9-]+\t/.test(p)) {
+          const [addS, remS, path] = p.split("\t");
+          const a = addS === "-" ? 0 : Number(addS);
+          const r = remS === "-" ? 0 : Number(remS);
+          numByPath.set(path, { a, r });
+        } else if (/^[ACDMRTU]/.test(p)) {
+          const [code, ...rest] = p.split("\t");
+          const letter = code[0];
+          if (letter === "R" || letter === "C") {
+            // rename/copy: next two entries are old, new
+            const oldPath = parts[++i];
+            const newPath = parts[++i];
+            statusByPath.set(newPath, letter === "R" ? "renamed" : "added");
+            oldByPath.set(newPath, oldPath);
+          } else {
+            const path = rest[0] ?? parts[++i];
+            statusByPath.set(path, letterToStatus(letter));
+          }
+        }
+      }
+      const files: CommitFile[] = [];
+      const seen = new Set<string>();
+      for (const [path, status] of statusByPath) {
+        const n = numByPath.get(path) ?? { a: 0, r: 0 };
+        files.push({
+          path,
+          oldPath: oldByPath.get(path),
+          status,
+          added: n.a,
+          removed: n.r,
+        });
+        seen.add(path);
+      }
+      for (const [path, n] of numByPath) {
+        if (seen.has(path)) continue;
+        files.push({ path, status: "modified", added: n.a, removed: n.r });
+      }
+      return files.sort((a, b) => a.path.localeCompare(b.path));
+    } catch {
+      return [];
+    }
+  }
+
   // ---- Pull / push / fetch ----------------------------------------------
 
   async pull(opts: PullOptions): Promise<string> {
@@ -516,6 +754,25 @@ function mapWorkTreeStatus(code: string): FileStatus {
       return "untracked";
     case "A":
       return "added";
+    case "T":
+      return "typechange";
+    case "U":
+      return "conflicted";
+    default:
+      return "modified";
+  }
+}
+
+function letterToStatus(l: string): FileStatus {
+  switch (l) {
+    case "A":
+      return "added";
+    case "M":
+      return "modified";
+    case "D":
+      return "deleted";
+    case "R":
+      return "renamed";
     case "T":
       return "typechange";
     case "U":

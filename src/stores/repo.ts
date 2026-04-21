@@ -1,6 +1,15 @@
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
-import type { Branch, Commit, PullRequest, RepoStatus, Remote } from "@shared/types";
+import type {
+  Branch,
+  Commit,
+  PullRequest,
+  RepoStatus,
+  Remote,
+  Stash,
+  Tag,
+  Worktree,
+} from "@shared/types";
 import { unwrap, maybe } from "../lib/ipc";
 import { useUI } from "./ui";
 
@@ -18,6 +27,9 @@ export interface TabData {
   loadingMoreCommits: boolean;
   remotes: Remote[];
   prs: PullRequest[];
+  stashes: Stash[];
+  tags: Tag[];
+  worktrees: Worktree[];
   ghAvailable: boolean;
   behindRemote: number;
   loading: boolean;
@@ -43,6 +55,9 @@ interface RepoState {
   loadMoreCommits: (repoPath?: string) => Promise<void>;
   refreshRemotes: (repoPath?: string) => Promise<void>;
   refreshPRs: (repoPath?: string) => Promise<void>;
+  refreshStashes: (repoPath?: string) => Promise<void>;
+  refreshTags: (repoPath?: string) => Promise<void>;
+  refreshWorktrees: (repoPath?: string) => Promise<void>;
   setBehindRemote: (repoPath: string, v: number) => void;
 }
 
@@ -61,6 +76,9 @@ function emptyTab(path: string): TabData {
     loadingMoreCommits: false,
     remotes: [],
     prs: [],
+    stashes: [],
+    tags: [],
+    worktrees: [],
     ghAvailable: false,
     behindRemote: 0,
     loading: true,
@@ -144,6 +162,16 @@ export const useRepo = create<RepoState>((set, get) => ({
     // so subsequent IPC calls hit the right session.
     await maybe(window.gitApi.setActiveRepo(tab.path));
     set({ activeIdx: idx });
+    // PR / commit selections are per-repo — carrying them across tabs
+    // surfaces stale data (e.g. PR #42 doesn't exist in the other repo).
+    // Reset any tab-scoped UI state on switch.
+    const ui = useUI.getState();
+    if (ui.selectedPR != null) ui.selectPR(null);
+    if (ui.selectedCommit != null) ui.selectCommit(null);
+    if (ui.selectedStash != null) ui.selectStash(null);
+    if (ui.selectedCommitFile != null) ui.selectCommitFile(null);
+    if (ui.selectedWipFile != null) ui.selectWipFile(null);
+    if (ui.view === "pr-detail" || ui.view === "merge") ui.setView("graph");
     queueSessionWrite(get());
   },
 
@@ -162,6 +190,9 @@ export const useRepo = create<RepoState>((set, get) => ({
       get().refreshLog({ all: true }, path),
       get().refreshRemotes(path),
       get().refreshPRs(path),
+      get().refreshStashes(path),
+      get().refreshTags(path),
+      get().refreshWorktrees(path),
     ]);
   },
 
@@ -240,6 +271,27 @@ export const useRepo = create<RepoState>((set, get) => ({
     const stateFilter = useUI.getState().prStateFilter;
     const prs = await maybe(window.ghApi.prList(stateFilter));
     get().patchTab(path, { prs: prs ?? [] });
+  },
+
+  refreshStashes: async (repoPath) => {
+    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
+    if (!path) return;
+    const stashes = await maybe(window.gitApi.stashList());
+    if (stashes) get().patchTab(path, { stashes });
+  },
+
+  refreshTags: async (repoPath) => {
+    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
+    if (!path) return;
+    const tags = await maybe(window.gitApi.tags());
+    if (tags) get().patchTab(path, { tags });
+  },
+
+  refreshWorktrees: async (repoPath) => {
+    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
+    if (!path) return;
+    const worktrees = await maybe(window.gitApi.worktreeList());
+    if (worktrees) get().patchTab(path, { worktrees });
   },
 
   setBehindRemote: (path, behindRemote) => get().patchTab(path, { behindRemote }),

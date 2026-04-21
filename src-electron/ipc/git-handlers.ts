@@ -147,4 +147,41 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   ipc.handle(GIT.FILE_AT_REF, (_e, { ref, path: p }: { ref: string; path: string }) =>
     wrap(() => exec(repo).fileAtRef(ref, p)),
   );
+
+  ipc.handle(GIT.STASH_LIST, () => wrap(() => exec(repo).stashList()));
+  ipc.handle(GIT.STASH_APPLY, (_e, index: number) => wrap(() => exec(repo).stashApply(index)));
+  ipc.handle(GIT.STASH_DROP, (_e, index: number) => wrap(() => exec(repo).stashDrop(index)));
+  ipc.handle(GIT.STASH_SHOW, (_e, index: number) => wrap(() => exec(repo).stashShow(index)));
+
+  ipc.handle(GIT.TAGS, () => wrap(() => exec(repo).tags()));
+  ipc.handle(
+    GIT.TAG_CREATE,
+    (_e, { name, ref, message }: { name: string; ref: string; message?: string }) =>
+      wrap(() => exec(repo).tagCreate(name, ref, message)),
+  );
+  ipc.handle(GIT.TAG_DELETE, (_e, name: string) => wrap(() => exec(repo).tagDelete(name)));
+
+  ipc.handle(GIT.WORKTREE_LIST, () => wrap(() => exec(repo).worktrees()));
+  ipc.handle(
+    GIT.WORKTREE_ADD,
+    (
+      _e,
+      { path: p, branch, createBranch }: { path: string; branch: string; createBranch?: boolean },
+    ) => wrap(() => exec(repo).worktreeAdd(p, branch, createBranch)),
+  );
+  ipc.handle(
+    GIT.WORKTREE_REMOVE,
+    (_e, { path: p, force }: { path: string; force?: boolean }) =>
+      wrap(() => exec(repo).worktreeRemove(p, force)),
+  );
+  ipc.handle(
+    GIT.WORKTREE_LOCK,
+    (_e, { path: p, reason }: { path: string; reason?: string }) =>
+      wrap(() => exec(repo).worktreeLock(p, reason)),
+  );
+  ipc.handle(GIT.WORKTREE_UNLOCK, (_e, p: string) =>
+    wrap(() => exec(repo).worktreeUnlock(p)),
+  );
+
+  ipc.handle(GIT.COMMIT_FILES, (_e, hash: string) => wrap(() => exec(repo).commitFiles(hash)));
 }
