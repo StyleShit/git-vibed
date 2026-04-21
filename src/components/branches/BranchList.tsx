@@ -5,6 +5,7 @@ import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
 import type { Branch } from "@shared/types";
 import { BranchContextMenu } from "./BranchContextMenu";
+import { BranchCreateDialog } from "./BranchCreateDialog";
 import { MergeRebaseDialog } from "./MergeRebaseDialog";
 import { Prompt } from "../ui/Prompt";
 import { PRCreateDialog } from "../github/PRCreateDialog";
@@ -63,6 +64,7 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
   const [renaming, setRenaming] = useState<Branch | null>(null);
   const [pulling, setPulling] = useState<string | null>(null);
   const [prHead, setPrHead] = useState<string | null>(null);
+  const [createFromBase, setCreateFromBase] = useState<string | null>(null);
 
   // Persist collapse state per-kind so local & remote sections remember
   // independently. The key is just `local` or `remote`; we don't scope by
@@ -262,6 +264,7 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
           onRebase={(src) => setMergeDialog({ kind: "rebase", source: src })}
           onRename={(b) => setRenaming(b)}
           onOpenPR={(b) => setPrHead(b.name)}
+          onCreateBranch={(base) => setCreateFromBase(base)}
         />
       )}
       {folderMenu && (
@@ -337,6 +340,12 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
         />
       )}
       {prHead && <PRCreateDialog headBranch={prHead} onClose={() => setPrHead(null)} />}
+      {createFromBase && (
+        <BranchCreateDialog
+          initialBase={createFromBase}
+          onClose={() => setCreateFromBase(null)}
+        />
+      )}
     </div>
   );
 });

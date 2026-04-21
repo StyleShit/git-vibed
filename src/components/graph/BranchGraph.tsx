@@ -7,6 +7,7 @@ import { CommitDetail } from "./CommitDetail";
 import { CommitContextMenu } from "./CommitContextMenu";
 import { StashContextMenu } from "./StashContextMenu";
 import { BranchContextMenu } from "../branches/BranchContextMenu";
+import { BranchCreateDialog } from "../branches/BranchCreateDialog";
 import { MergeRebaseDialog } from "../branches/MergeRebaseDialog";
 import { Prompt } from "../ui/Prompt";
 import { PRCreateDialog } from "../github/PRCreateDialog";
@@ -909,6 +910,12 @@ function RefBadge({
 // dialogs locally without lifting them up to BranchGraph — each ref
 // badge owns its own menu lifecycle. Portals sidestep the commit row's
 // overflow-hidden refs column.
+//
+// Menu visibility is tracked internally so that dismissing the menu after
+// clicking an action (Merge, Rebase, …) doesn't also tear down the host
+// — if it did, the follow-up dialog state would be dropped before it
+// could render. The host only reports fully-closed to its parent once
+// the menu is hidden AND no dialogs remain open.
 function RefBranchMenuHost({
   x,
   y,
@@ -920,13 +927,21 @@ function RefBranchMenuHost({
   branch: import("@shared/types").Branch;
   onClose: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(true);
   const [mergeDialog, setMergeDialog] = useState<
     { kind: "merge" | "rebase"; source: string } | null
   >(null);
   const [renaming, setRenaming] = useState<import("@shared/types").Branch | null>(null);
   const [prHead, setPrHead] = useState<string | null>(null);
+  const [createFromBase, setCreateFromBase] = useState<string | null>(null);
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
+
+  useEffect(() => {
+    if (!menuOpen && !mergeDialog && !renaming && !prHead && !createFromBase) {
+      onClose();
+    }
+  }, [menuOpen, mergeDialog, renaming, prHead, createFromBase, onClose]);
 
   async function handleRename(newName: string) {
     const target = renaming;
@@ -943,21 +958,30 @@ function RefBranchMenuHost({
 
   return createPortal(
     <>
-      <BranchContextMenu
-        x={x}
-        y={y}
-        branch={branch}
-        onClose={onClose}
-        onMerge={(src) => setMergeDialog({ kind: "merge", source: src })}
-        onRebase={(src) => setMergeDialog({ kind: "rebase", source: src })}
-        onRename={(b) => setRenaming(b)}
-        onOpenPR={(b) => setPrHead(b.name)}
-      />
+      {menuOpen && (
+        <BranchContextMenu
+          x={x}
+          y={y}
+          branch={branch}
+          onClose={() => setMenuOpen(false)}
+          onMerge={(src) => setMergeDialog({ kind: "merge", source: src })}
+          onRebase={(src) => setMergeDialog({ kind: "rebase", source: src })}
+          onRename={(b) => setRenaming(b)}
+          onOpenPR={(b) => setPrHead(b.name)}
+          onCreateBranch={(base) => setCreateFromBase(base)}
+        />
+      )}
       {mergeDialog && (
         <MergeRebaseDialog
           kind={mergeDialog.kind}
           source={mergeDialog.source}
           onClose={() => setMergeDialog(null)}
+        />
+      )}
+      {createFromBase && (
+        <BranchCreateDialog
+          initialBase={createFromBase}
+          onClose={() => setCreateFromBase(null)}
         />
       )}
       {renaming && (

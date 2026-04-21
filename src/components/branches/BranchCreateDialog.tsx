@@ -4,7 +4,13 @@ import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 
-export function BranchCreateDialog({ onClose }: { onClose: () => void }) {
+export function BranchCreateDialog({
+  onClose,
+  initialBase,
+}: {
+  onClose: () => void;
+  initialBase?: string;
+}) {
   const { branches, status } = useActiveTabShallow((t) => ({
     branches: t?.branches ?? [],
     status: t?.status ?? null,
@@ -12,7 +18,7 @@ export function BranchCreateDialog({ onClose }: { onClose: () => void }) {
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const [name, setName] = useState("");
-  const [base, setBase] = useState(status?.branch ?? "HEAD");
+  const [base, setBase] = useState(initialBase ?? status?.branch ?? "HEAD");
   const [checkout, setCheckout] = useState(true);
   const [busy, setBusy] = useState(false);
 

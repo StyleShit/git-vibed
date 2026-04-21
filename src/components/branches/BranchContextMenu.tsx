@@ -16,6 +16,7 @@ interface Props {
   onRebase: (source: string) => void;
   onRename: (branch: Branch) => void;
   onOpenPR: (branch: Branch) => void;
+  onCreateBranch: (base: string) => void;
 }
 
 export function BranchContextMenu({
@@ -27,6 +28,7 @@ export function BranchContextMenu({
   onRebase,
   onRename,
   onOpenPR,
+  onCreateBranch,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const toast = useUI((s) => s.toast);
@@ -226,6 +228,14 @@ export function BranchContextMenu({
             Rename…
           </Item>
         )}
+        <Item
+          onClick={() => {
+            onCreateBranch(branch.name);
+            onClose();
+          }}
+        >
+          Create branch from here…
+        </Item>
         {(canPull || canPush) && <Divider />}
         {canPull && <Item onClick={pull}>Pull</Item>}
         {canPush && <Item onClick={() => push(false)}>Push</Item>}
