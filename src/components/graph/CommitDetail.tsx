@@ -11,6 +11,8 @@ import {
   CommitIcon,
   ExternalLinkIcon,
   FolderIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
 } from "../ui/Icons";
 import { Avatar } from "../ui/Avatar";
 import type { Commit, CommitFile, FileStatus, PullRequest } from "@shared/types";
@@ -22,11 +24,16 @@ import type { Commit, CommitFile, FileStatus, PullRequest } from "@shared/types"
 export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => void }) {
   const commits = useActive("commits") ?? [];
   const prs = useActive("prs") ?? [];
+  const status = useActive("status");
   const toast = useUI((s) => s.toast);
   const [commit, setCommit] = useState<Commit | null>(null);
   const [files, setFiles] = useState<CommitFile[]>([]);
   const [view, setView] = useState<"path" | "tree">("path");
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const wipCount =
+    (status?.staged.length ?? 0) +
+    (status?.unstaged.length ?? 0) +
+    (status?.conflicted.length ?? 0);
 
   useEffect(() => {
     setCommit(commits.find((x) => x.hash === hash) ?? null);
@@ -71,6 +78,34 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
 
   return (
     <aside className="flex h-full w-full flex-col border-l border-neutral-800 bg-neutral-925">
+      {/* Top strip: when there are uncommitted changes we show the count
+          + a quick "Show changes" jump; when the working tree is clean
+          the strip would just say "nothing" so we skip it entirely and
+          render a small close X in the top-right corner instead. */}
+      {wipCount > 0 ? (
+        <div className="flex h-8 shrink-0 items-center justify-between border-b border-neutral-800 bg-neutral-900/60 px-3 text-xs">
+          <span className="text-neutral-400">
+            <span className="font-medium text-neutral-200">{wipCount}</span>{" "}
+            uncommitted change{wipCount === 1 ? "" : "s"}
+          </span>
+          <button
+            onClick={onClose}
+            className="rounded bg-indigo-500/20 px-2 py-0.5 text-xs text-indigo-200 hover:bg-indigo-500/30"
+          >
+            Show changes →
+          </button>
+        </div>
+      ) : (
+        <div className="flex h-8 shrink-0 items-center justify-end border-b border-neutral-800 bg-neutral-900/40 px-2 text-xs">
+          <button
+            onClick={onClose}
+            title="Close"
+            className="rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+          >
+            <CloseIcon className="size-3.5" />
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
         <div className="flex items-center gap-2 text-xs text-neutral-400">
           <span>commit</span>
@@ -83,13 +118,6 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
             <CopyIcon className="size-3 text-neutral-400" />
           </button>
         </div>
-        <button
-          onClick={onClose}
-          className="rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
-          title="Close"
-        >
-          <CloseIcon className="size-3.5" />
-        </button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -97,14 +125,10 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
           <div className="text-[15px] font-medium leading-snug text-neutral-100">
             {commit.subject}
           </div>
-          {commit.body && (
-            <pre className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-neutral-300">
-              {commit.body}
-            </pre>
-          )}
+          {commit.body && <CommitBody body={commit.body} />}
         </div>
 
-        <div className="space-y-2 border-b border-neutral-800 px-3 py-3 text-xs">
+        <div className="space-y-4 border-b border-neutral-800 px-4 py-4 text-xs">
           <PersonCard
             role="authored"
             name={commit.author}
@@ -112,8 +136,8 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
             date={date}
           />
           {commit.parents.length > 0 && (
-            <div className="mt-2 flex items-start gap-2">
-              <span className="w-16 shrink-0 text-neutral-500">parent</span>
+            <div className="flex items-start gap-3">
+              <span className="w-16 shrink-0 pt-0.5 text-neutral-500">parent</span>
               <div className="mono flex min-w-0 flex-wrap gap-1 text-neutral-300">
                 {commit.parents.map((p) => (
                   <span
@@ -128,8 +152,8 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
             </div>
           )}
           {commit.refs.length > 0 && (
-            <div className="mt-2 flex items-start gap-2">
-              <span className="w-16 shrink-0 text-neutral-500">refs</span>
+            <div className="flex items-start gap-3">
+              <span className="w-16 shrink-0 pt-0.5 text-neutral-500">refs</span>
               <div className="flex min-w-0 flex-wrap gap-1 text-neutral-300">
                 {commit.refs.map((r) => (
                   <span
@@ -165,7 +189,7 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
           <div className="flex items-center gap-2 text-neutral-400">
             {stats.modified > 0 && (
               <span>
-                <span className="text-neutral-200">{stats.modified}</span> modified
+                <span className="text-amber-400">{stats.modified}</span> modified
               </span>
             )}
             {stats.added > 0 && (
@@ -204,6 +228,36 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
   );
 }
 
+// Collapse long commit bodies behind a "Show more" control — dependabot
+// and similar bots churn out multi-kilobyte descriptions that otherwise
+// push the rest of the inspector (files list, PR link) off-screen.
+// The visible block is also capped via max-height so even a collapsed
+// "preview" stays close to one or two lines of the subject.
+function CommitBody({ body }: { body: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const LIMIT = 180;
+  const overflow = body.length > LIMIT;
+  const shown = !overflow || expanded ? body : body.slice(0, LIMIT).trimEnd() + "…";
+  return (
+    <>
+      <pre
+        className="mt-2 overflow-auto whitespace-pre-wrap text-[12px] leading-snug text-neutral-300"
+        style={{ maxHeight: expanded ? 320 : 56 }}
+      >
+        {shown}
+      </pre>
+      {overflow && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-[11px] text-indigo-400 hover:text-indigo-300"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </>
+  );
+}
+
 function PersonCard({
   role,
   name,
@@ -216,14 +270,21 @@ function PersonCard({
   date: Date;
 }) {
   return (
-    <div className="flex items-start gap-2">
-      <Avatar name={name} email={email} size={24} className="mt-0.5" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-1">
+    <div className="flex items-start gap-3">
+      <Avatar name={name} email={email} size={28} className="mt-0.5" />
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="flex items-baseline gap-1.5">
           <span className="truncate text-sm font-medium text-neutral-100">{name}</span>
-          <span className="text-[10px] text-neutral-500">{role}</span>
+          <span className="text-[10px] uppercase tracking-wider text-neutral-500">
+            {role}
+          </span>
         </div>
-        <div className="truncate text-[11px] text-neutral-500" title={email}>
+        {email && (
+          <div className="mono truncate text-[11px] text-neutral-400" title={email}>
+            {email}
+          </div>
+        )}
+        <div className="truncate text-[11px] text-neutral-500">
           {date.toLocaleString()}
         </div>
       </div>
@@ -333,6 +394,7 @@ function TreeNodeRow({
   depth: number;
   hash: string;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
   const isFile = !!node.file;
   if (isFile && node.children.size === 0) {
     return <FileRow file={node.file!} label={node.name} depth={depth} hash={hash} />;
@@ -340,15 +402,22 @@ function TreeNodeRow({
   return (
     <>
       <div
-        className="flex items-center gap-1.5 py-1 text-sm text-neutral-400"
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex cursor-pointer items-center gap-1.5 rounded py-1 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
         style={{ paddingLeft: 8 + depth * 12 }}
       >
+        {collapsed ? (
+          <ChevronRightIcon className="size-3 shrink-0 text-neutral-500" />
+        ) : (
+          <ChevronDownIcon className="size-3 shrink-0 text-neutral-500" />
+        )}
         <FolderIcon className="size-3.5 shrink-0" />
         <span className="truncate">{node.name}</span>
       </div>
-      {[...node.children.values()].map((c) => (
-        <TreeNodeRow key={c.name} node={c} depth={depth + 1} hash={hash} />
-      ))}
+      {!collapsed &&
+        [...node.children.values()].map((c) => (
+          <TreeNodeRow key={c.name} node={c} depth={depth + 1} hash={hash} />
+        ))}
     </>
   );
 }
