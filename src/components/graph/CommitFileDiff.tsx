@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useUI } from "../../stores/ui";
+import { useSettings } from "../../stores/settings";
 import { maybe } from "../../lib/ipc";
-import { detectLanguage, highlightLine } from "../../lib/highlight";
+import { detectLanguage } from "../../lib/highlight";
 import type { FileDiff } from "@shared/types";
-import { ChevronRightIcon } from "../ui/Icons";
+import { ChevronRightIcon, CloseIcon } from "../ui/Icons";
+import { SplitView, UnifiedView } from "./DiffView";
 
 // Read-only diff for a file at a specific commit — shown in the center
-// panel when a file is clicked inside CommitDetail. The back link returns
-// the user to the commit graph without losing the selected commit.
+// panel when a file is clicked inside CommitDetail. Supports unified &
+// side-by-side view modes, sharing the SettingsStore preference with the
+// WIP diff so toggling it in one place sticks everywhere.
 export function CommitFileDiff({ hash, path }: { hash: string; path: string }) {
   const selectCommitFile = useUI((s) => s.selectCommitFile);
+  const viewMode = useSettings((s) => s.diffViewMode);
+  const setViewMode = useSettings((s) => s.setDiffViewMode);
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const lang = useMemo(() => detectLanguage(path), [path]);
 
@@ -26,16 +31,30 @@ export function CommitFileDiff({ hash, path }: { hash: string; path: string }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-8 shrink-0 items-center gap-1 border-b border-neutral-800 bg-neutral-925 px-2 text-xs">
-        <button
-          onClick={() => selectCommitFile(null)}
-          className="rounded px-2 py-0.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
-        >
-          ← Back
-        </button>
-        <ChevronRightIcon className="size-3 text-neutral-600" />
         <span className="mono text-neutral-400">{hash.slice(0, 7)}</span>
         <ChevronRightIcon className="size-3 text-neutral-600" />
         <span className="mono text-neutral-200">{path}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex rounded border border-neutral-800 p-0.5">
+            <ModeToggle
+              active={viewMode === "unified"}
+              onClick={() => setViewMode("unified")}
+              label="Hunk"
+            />
+            <ModeToggle
+              active={viewMode === "split"}
+              onClick={() => setViewMode("split")}
+              label="Split"
+            />
+          </div>
+          <button
+            onClick={() => selectCommitFile(null)}
+            className="rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+            title="Close diff (Esc)"
+          >
+            <CloseIcon className="size-3.5" />
+          </button>
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto bg-neutral-950">
         {diff === null ? (
@@ -44,40 +63,33 @@ export function CommitFileDiff({ hash, path }: { hash: string; path: string }) {
           <div className="p-6 text-center text-sm text-neutral-500">Binary file</div>
         ) : diff.hunks.length === 0 ? (
           <div className="p-6 text-center text-sm text-neutral-500">No changes</div>
+        ) : viewMode === "split" ? (
+          <SplitView diff={diff} lang={lang} />
         ) : (
-          <pre className="hljs mono whitespace-pre p-3 text-[12px] leading-relaxed">
-            {diff.hunks.map((h, i) => (
-              <div key={i} className="mb-3">
-                <div className="bg-neutral-900 px-2 py-0.5 text-indigo-300">{h.header}</div>
-                {h.lines.map((l, j) => (
-                  <div key={j} className={`flex ${lineBgClass(l.type)}`}>
-                    <span className="mr-2 inline-block w-10 select-none text-right text-neutral-600">
-                      {l.oldLineNo ?? ""}
-                    </span>
-                    <span className="mr-2 inline-block w-10 select-none text-right text-neutral-600">
-                      {l.newLineNo ?? ""}
-                    </span>
-                    <span className="mr-1 inline-block w-3 text-neutral-500">
-                      {l.type === "add" ? "+" : l.type === "del" ? "-" : " "}
-                    </span>
-                    <span
-                      dangerouslySetInnerHTML={{
-                        __html: l.content ? highlightLine(l.content, lang) : "&nbsp;",
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </pre>
+          <UnifiedView diff={diff} lang={lang} />
         )}
       </div>
     </div>
   );
 }
 
-function lineBgClass(t: "add" | "del" | "context"): string {
-  if (t === "add") return "bg-emerald-500/15";
-  if (t === "del") return "bg-red-500/15";
-  return "";
+function ModeToggle({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded px-2 py-0.5 text-[11px] ${
+        active ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-200"
+      }`}
+    >
+      {label}
+    </button>
+  );
 }
