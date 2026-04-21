@@ -1,73 +1,82 @@
 import { useUI } from "../../stores/ui";
 import { useActive } from "../../stores/repo";
 import { BranchGraph } from "../graph/BranchGraph";
-import { ChangesView } from "../commit/ChangesView";
 import { RemotesPanel } from "../remotes/RemotesPanel";
 import { SettingsPanel } from "../settings/SettingsPanel";
 import { PRDetail } from "../github/PRDetail";
 import { MergeEditor } from "../merge/MergeEditor";
 import { ConflictList } from "../merge/ConflictList";
+import { Spinner } from "../ui/Spinner";
 
 export function MainPanel() {
   const view = useUI((s) => s.view);
   const status = useActive("status") ?? null;
+  const loading = useActive("loading") ?? false;
+  const commits = useActive("commits") ?? [];
   const inConflict = (status?.conflicted.length ?? 0) > 0;
+
+  // Render a loader only on the initial repo open when we don't have any
+  // data yet — background refreshes shouldn't black out the graph.
+  const initialLoading = loading && commits.length === 0 && !status;
 
   return (
     <main className="relative flex min-w-0 flex-1 flex-col bg-neutral-950">
-      <ViewTabs inConflict={inConflict} />
+      {inConflict && <ConflictBanner />}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {view === "graph" && <BranchGraph />}
-        {view === "changes" && <ChangesView />}
-        {view === "remotes" && <RemotesPanel />}
-        {view === "settings" && <SettingsPanel />}
-        {view === "pr-detail" && <PRDetail />}
-        {view === "merge" && (
-          <div className="flex h-full">
-            <ConflictList />
-            <MergeEditor />
-          </div>
+        {initialLoading ? (
+          <RepoLoading />
+        ) : (
+          <>
+            {view === "graph" && <BranchGraph />}
+            {view === "remotes" && <RemotesPanel />}
+            {view === "settings" && <SettingsPanel />}
+            {view === "pr-detail" && <PRDetail />}
+            {view === "merge" && (
+              <div className="flex h-full">
+                <ConflictList />
+                <MergeEditor />
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>
   );
 }
 
-function ViewTabs({ inConflict }: { inConflict: boolean }) {
+function RepoLoading() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 text-neutral-400">
+      <Spinner size={28} />
+      <div className="text-sm">Opening repository…</div>
+    </div>
+  );
+}
+
+// Merge/rebase conflict state used to be a tab; with the single-view layout
+// we surface it as a slim banner with a "Resolve conflicts" action that
+// swaps to the merge editor, and a "Back" once the user is editing.
+function ConflictBanner() {
   const view = useUI((s) => s.view);
   const setView = useUI((s) => s.setView);
-  const status = useActive("status") ?? null;
-  const unstagedCount = (status?.unstaged.length ?? 0) + (status?.conflicted.length ?? 0);
-  const stagedCount = status?.staged.length ?? 0;
-  const changesBadge = unstagedCount + stagedCount;
-
-  const tabs: Array<{ id: typeof view; label: string; badge?: number }> = [
-    { id: "graph", label: "History" },
-    { id: "changes", label: "Changes", badge: changesBadge || undefined },
-  ];
-  if (inConflict) tabs.push({ id: "merge", label: "Resolve Conflicts" });
-
   return (
-    <div className="flex border-b border-neutral-800 bg-neutral-925 px-2">
-      {tabs.map((t) => (
+    <div className="flex h-8 shrink-0 items-center justify-between border-b border-amber-600/40 bg-amber-500/10 px-3 text-xs text-amber-200">
+      <span>Merge conflicts in this working tree.</span>
+      {view === "merge" ? (
         <button
-          key={t.id}
-          onClick={() => setView(t.id)}
-          className={`relative px-4 py-2 text-sm transition ${
-            view === t.id ? "text-neutral-100" : "text-neutral-400 hover:text-neutral-200"
-          }`}
+          onClick={() => setView("graph")}
+          className="rounded px-2 py-0.5 text-amber-100 hover:bg-amber-500/20"
         >
-          {t.label}
-          {t.badge != null && (
-            <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-500 px-1 text-[10px] text-white">
-              {t.badge}
-            </span>
-          )}
-          {view === t.id && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500" />
-          )}
+          ← Back to history
         </button>
-      ))}
+      ) : (
+        <button
+          onClick={() => setView("merge")}
+          className="rounded bg-amber-500/30 px-2 py-0.5 text-amber-100 hover:bg-amber-500/50"
+        >
+          Resolve conflicts →
+        </button>
+      )}
     </div>
   );
 }

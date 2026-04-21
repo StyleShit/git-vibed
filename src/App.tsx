@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Sidebar } from "./components/layout/Sidebar";
 import { MainPanel } from "./components/layout/MainPanel";
 import { StatusBar } from "./components/layout/StatusBar";
@@ -6,6 +6,8 @@ import { Toolbar } from "./components/layout/Toolbar";
 import { Toasts } from "./components/layout/Toasts";
 import { Welcome } from "./components/layout/Welcome";
 import { TabBar } from "./components/layout/TabBar";
+import { CommandPalette } from "./components/palette/CommandPalette";
+import { ResizeHandle } from "./components/ui/ResizeHandle";
 import { useRepo, useActiveTab } from "./stores/repo";
 import { useSettings } from "./stores/settings";
 import { useUI } from "./stores/ui";
@@ -15,6 +17,8 @@ export function App() {
   const tabs = useRepo((s) => s.tabs);
   const activeTab = useActiveTab();
   const theme = useSettings((s) => s.theme);
+  const sidebarWidth = useSettings((s) => s.sidebarWidth);
+  const setSidebarWidth = useSettings((s) => s.setSidebarWidth);
   const toast = useUI((s) => s.toast);
 
   useKeyboardShortcuts();
@@ -42,19 +46,27 @@ export function App() {
       refreshStatus,
       refreshBranches,
       refreshLog,
+      refreshStashes,
+      refreshTags,
+      refreshWorktrees,
       setBehindRemote,
     } = useRepo.getState();
     const off1 = window.gitApi.onRepoChanged((e) => {
       const target = e.repoPath;
-      if (e.type === "index" || e.type === "worktree") void refreshStatus(target);
+      if (e.type === "index" || e.type === "worktree") {
+        void refreshStatus(target);
+        void refreshStashes(target);
+      }
       if (e.type === "head") {
         void refreshStatus(target);
         void refreshBranches(target);
         void refreshLog({ all: true }, target);
+        void refreshWorktrees(target);
       }
       if (e.type === "refs") {
         void refreshBranches(target);
         void refreshLog({ all: true }, target);
+        void refreshTags(target);
       }
     });
     const off2 = window.gitApi.onFetchComplete((e) => {
@@ -141,11 +153,18 @@ export function App() {
       <TabBar />
       <Toolbar />
       <div className="flex min-h-0 flex-1">
-        <Sidebar />
+        <div style={{ width: sidebarWidth }} className="shrink-0">
+          <Sidebar />
+        </div>
+        <ResizeHandle
+          onResize={(dx) => setSidebarWidth(sidebarWidth + dx)}
+          side="right"
+        />
         <MainPanel />
       </div>
       <StatusBar />
       <Toasts />
+      <CommandPalette />
     </div>
   );
 }

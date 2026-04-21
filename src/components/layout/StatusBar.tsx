@@ -2,6 +2,7 @@ import { useActiveTabShallow } from "../../stores/repo";
 import { useEffect, useState } from "react";
 import { unwrap } from "../../lib/ipc";
 import { useUI } from "../../stores/ui";
+import { BranchIcon, FetchIcon } from "../ui/Icons";
 import type { PullRequest } from "@shared/types";
 
 export function StatusBar() {
@@ -36,12 +37,7 @@ export function StatusBar() {
     <div className="flex h-7 items-center justify-between border-t border-neutral-800 bg-neutral-925 px-3 text-xs text-neutral-400">
       <div className="flex items-center gap-4">
         <span className="flex items-center gap-1.5">
-          <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="6" cy="5" r="2" />
-            <circle cx="6" cy="19" r="2" />
-            <circle cx="18" cy="12" r="2" />
-            <path d="M6 7v10M8 5h8a4 4 0 014 4v0M6 17V9a4 4 0 014-4h2" />
-          </svg>
+          <BranchIcon className="size-3" />
           {status.branch ?? "detached"}
         </span>
         {status.tracking && (
@@ -68,7 +64,7 @@ export function StatusBar() {
           </span>
         )}
         <button
-          className="hover:text-neutral-100"
+          className="flex items-center gap-1 hover:text-neutral-100"
           onClick={async () => {
             setFetching(true);
             try {
@@ -79,6 +75,7 @@ export function StatusBar() {
             }
           }}
         >
+          <FetchIcon className={`size-3 ${fetching ? "animate-pulse" : ""}`} />
           {fetching ? "Fetching…" : "Refresh"}
         </button>
       </div>
