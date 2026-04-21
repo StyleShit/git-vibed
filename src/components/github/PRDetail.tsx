@@ -143,10 +143,12 @@ export function PRDetail() {
           <h2 className="mb-2 text-sm font-semibold text-neutral-300">Checks</h2>
           <ul className="mb-6 space-y-1 text-sm">
             {checks.length === 0 && <li className="text-neutral-500">No checks</li>}
-            {checks.map((c) => (
-              <li key={c.name} className="flex items-center gap-2">
-                <CheckDot conclusion={c.conclusion} status={c.status} />
-                <span className="min-w-0 flex-1 truncate">{c.name}</span>
+            {checks.map((c, i) => (
+              <li key={`${c.name}-${i}`} className="flex items-center gap-2">
+                <CheckDot check={c} />
+                <span className="min-w-0 flex-1 truncate" title={c.workflow ? `${c.workflow} · ${c.name}` : c.name}>
+                  {c.name}
+                </span>
                 {c.detailsUrl && (
                   <button
                     onClick={() => window.gitApi.openExternal(c.detailsUrl!)}
@@ -202,11 +204,19 @@ function StateBadge({ state, draft }: { state: PullRequest["state"]; draft: bool
   return <span className={`rounded px-1.5 py-0.5 text-[10px] ${map[state]}`}>{state}</span>;
 }
 
-function CheckDot({ conclusion, status }: { conclusion: string | null; status: string }) {
-  let color = "bg-amber-400";
-  if (status !== "COMPLETED") color = "bg-amber-400";
-  else if (conclusion === "SUCCESS") color = "bg-emerald-500";
-  else if (conclusion === "FAILURE") color = "bg-red-500";
-  else if (conclusion === "NEUTRAL" || conclusion === "SKIPPED") color = "bg-neutral-500";
+function CheckDot({ check }: { check: Check }) {
+  const bucket = check.bucket?.toLowerCase();
+  const state = check.state?.toLowerCase();
+  let color = "bg-amber-400"; // default: pending / in_progress
+  if (bucket === "pass" || state === "success") color = "bg-emerald-500";
+  else if (bucket === "fail" || state === "failure") color = "bg-red-500";
+  else if (
+    bucket === "skipping" ||
+    bucket === "cancel" ||
+    state === "skipped" ||
+    state === "cancelled" ||
+    state === "neutral"
+  )
+    color = "bg-neutral-500";
   return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${color}`} />;
 }

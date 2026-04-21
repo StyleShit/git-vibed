@@ -156,14 +156,21 @@ export class GhExecutor {
         "checks",
         String(number),
         "--json",
-        "name,status,conclusion,link",
+        "name,state,bucket,link,workflow",
       ]);
-      const parsed = JSON.parse(raw) as Array<{ name: string; status: string; conclusion: string | null; link?: string }>;
+      const parsed = JSON.parse(raw) as Array<{
+        name: string;
+        state: string;
+        bucket?: string;
+        link?: string;
+        workflow?: string;
+      }>;
       return parsed.map((c) => ({
         name: c.name,
-        status: c.status,
-        conclusion: c.conclusion,
+        state: c.state,
+        bucket: c.bucket,
         detailsUrl: c.link,
+        workflow: c.workflow,
       }));
     } catch (e) {
       // `gh pr checks` errors when there are no checks yet — treat as empty.

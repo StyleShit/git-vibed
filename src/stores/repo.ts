@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import type { Branch, Commit, PullRequest, RepoStatus, Remote } from "@shared/types";
 import { unwrap, maybe } from "../lib/ipc";
+import { useUI } from "./ui";
 
 // Per-tab data. Each open repository has its own slice, so switching tabs
 // surfaces the other repo's state instantly without re-fetching.
@@ -10,12 +11,19 @@ export interface TabData {
   status: RepoStatus | null;
   branches: Branch[];
   commits: Commit[];
+  // True once git log returned fewer than a full page — means there are no
+  // older commits to paginate into. Prevents infinite scroll from firing
+  // repeated no-op fetches at the bottom of the list.
+  commitsExhausted: boolean;
+  loadingMoreCommits: boolean;
   remotes: Remote[];
   prs: PullRequest[];
   ghAvailable: boolean;
   behindRemote: number;
   loading: boolean;
 }
+
+const LOG_PAGE_SIZE = 500;
 
 interface RepoState {
   tabs: TabData[];
@@ -32,6 +40,7 @@ interface RepoState {
   refreshStatus: (repoPath?: string) => Promise<void>;
   refreshBranches: (repoPath?: string) => Promise<void>;
   refreshLog: (opts?: { all?: boolean }, repoPath?: string) => Promise<void>;
+  loadMoreCommits: (repoPath?: string) => Promise<void>;
   refreshRemotes: (repoPath?: string) => Promise<void>;
   refreshPRs: (repoPath?: string) => Promise<void>;
   setBehindRemote: (repoPath: string, v: number) => void;
@@ -48,6 +57,8 @@ function emptyTab(path: string): TabData {
     status: null,
     branches: [],
     commits: [],
+    commitsExhausted: false,
+    loadingMoreCommits: false,
     remotes: [],
     prs: [],
     ghAvailable: false,
@@ -171,8 +182,44 @@ export const useRepo = create<RepoState>((set, get) => ({
   refreshLog: async (opts, repoPath) => {
     const path = repoPath ?? get().tabs[get().activeIdx]?.path;
     if (!path) return;
-    const commits = await maybe(window.gitApi.log({ all: opts?.all ?? true, limit: 500 }));
-    if (commits) get().patchTab(path, { commits });
+    const commits = await maybe(
+      window.gitApi.log({ all: opts?.all ?? true, limit: LOG_PAGE_SIZE }),
+    );
+    if (commits) {
+      get().patchTab(path, {
+        commits,
+        commitsExhausted: commits.length < LOG_PAGE_SIZE,
+        loadingMoreCommits: false,
+      });
+    }
+  },
+
+  loadMoreCommits: async (repoPath) => {
+    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
+    if (!path) return;
+    const tab = get().tabs.find((t) => t.path === path);
+    if (!tab || tab.commitsExhausted || tab.loadingMoreCommits) return;
+    get().patchTab(path, { loadingMoreCommits: true });
+    const next = await maybe(
+      window.gitApi.log({
+        all: true,
+        limit: LOG_PAGE_SIZE,
+        skip: tab.commits.length,
+      }),
+    );
+    if (!next) {
+      get().patchTab(path, { loadingMoreCommits: false });
+      return;
+    }
+    // Dedupe by hash in case refreshLog races with loadMoreCommits and the
+    // two batches overlap at a page boundary.
+    const seen = new Set(tab.commits.map((c) => c.hash));
+    const appended = next.filter((c) => !seen.has(c.hash));
+    get().patchTab(path, {
+      commits: [...tab.commits, ...appended],
+      commitsExhausted: next.length < LOG_PAGE_SIZE,
+      loadingMoreCommits: false,
+    });
   },
 
   refreshRemotes: async (repoPath) => {
@@ -190,7 +237,8 @@ export const useRepo = create<RepoState>((set, get) => ({
       get().patchTab(path, { prs: [] });
       return;
     }
-    const prs = await maybe(window.ghApi.prList("open"));
+    const stateFilter = useUI.getState().prStateFilter;
+    const prs = await maybe(window.ghApi.prList(stateFilter));
     get().patchTab(path, { prs: prs ?? [] });
   },
 

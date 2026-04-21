@@ -3,24 +3,21 @@ import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
-import { PRCreateDialog } from "../github/PRCreateDialog";
-import { buildCreatePrUrl } from "../../lib/pr-url";
 
 type PullStrategy = "merge" | "rebase" | "ff-only";
 
+// The "Open PR" button used to live here; it's now exposed per-branch from
+// the branch right-click menu where we know the head ref to use.
 export function Toolbar() {
-  const { status, ghAvailable, remotes } = useActiveTabShallow((t) => ({
+  const { status } = useActiveTabShallow((t) => ({
     status: t?.status ?? null,
-    ghAvailable: t?.ghAvailable ?? false,
-    remotes: t?.remotes ?? [],
   }));
-  const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
+  const refreshAll = useRepo((s) => s.refreshAll);
   const defaultStrategy = useSettings((s) => s.defaultPullStrategy);
   const [busy, setBusy] = useState<"pull" | "push" | "fetch" | null>(null);
   const [pullMenuOpen, setPullMenuOpen] = useState(false);
   const [pushMenuOpen, setPushMenuOpen] = useState(false);
-  const [showPrDialog, setShowPrDialog] = useState(false);
 
   const currentBranch = status?.branch ?? null;
 
@@ -75,83 +72,42 @@ export function Toolbar() {
     }
   }
 
-  async function openPr() {
-    if (ghAvailable) {
-      setShowPrDialog(true);
-      return;
-    }
-    // Fallback: construct a compare URL for the host.
-    const origin = remotes.find((r) => r.name === "origin") ?? remotes[0];
-    if (!origin) {
-      toast("error", "No remote configured");
-      return;
-    }
-    const base = await deriveDefaultBranch(remotes[0]?.name ?? "origin");
-    const url = buildCreatePrUrl(origin.fetchUrl, base, currentBranch ?? "");
-    if (!url) {
-      toast("error", "Unsupported git host for PR fallback");
-      return;
-    }
-    await window.gitApi.openExternal(url);
-  }
-
   return (
-    <>
-      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-neutral-800 bg-neutral-925 px-2">
-        <ToolbarButton onClick={runFetch} disabled={!!busy}>
-          {busy === "fetch" ? "…" : "Fetch"}
-        </ToolbarButton>
-        <div className="relative">
-          <SplitButton
-            label={busy === "pull" ? "…" : `Pull${status?.behind ? ` (${status.behind})` : ""}`}
-            disabled={!!busy || !currentBranch}
-            onClick={() => runPull(defaultStrategy)}
-            onToggleMenu={() => setPullMenuOpen((v) => !v)}
-          />
-          {pullMenuOpen && (
-            <DropdownMenu onClose={() => setPullMenuOpen(false)}>
-              <MenuItem onClick={() => runPull("merge")}>Merge (default)</MenuItem>
-              <MenuItem onClick={() => runPull("rebase")}>Rebase</MenuItem>
-              <MenuItem onClick={() => runPull("ff-only")}>Fast-forward only</MenuItem>
-            </DropdownMenu>
-          )}
-        </div>
-        <div className="relative">
-          <SplitButton
-            label={busy === "push" ? "…" : `Push${status?.ahead ? ` (${status.ahead})` : ""}`}
-            disabled={!!busy || !currentBranch}
-            onClick={() => runPush(false)}
-            onToggleMenu={() => setPushMenuOpen((v) => !v)}
-          />
-          {pushMenuOpen && (
-            <DropdownMenu onClose={() => setPushMenuOpen(false)}>
-              <MenuItem onClick={() => runPush(false)}>Push</MenuItem>
-              <MenuItem onClick={() => runPush(true)}>Force push (with lease)</MenuItem>
-            </DropdownMenu>
-          )}
-        </div>
-        <div className="flex-1" />
-        <ToolbarButton onClick={openPr} disabled={!currentBranch || !remotes.length}>
-          Open PR
-        </ToolbarButton>
+    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-neutral-800 bg-neutral-925 px-2">
+      <ToolbarButton onClick={runFetch} disabled={!!busy}>
+        {busy === "fetch" ? "…" : "Fetch"}
+      </ToolbarButton>
+      <div className="relative">
+        <SplitButton
+          label={busy === "pull" ? "…" : `Pull${status?.behind ? ` (${status.behind})` : ""}`}
+          disabled={!!busy || !currentBranch}
+          onClick={() => runPull(defaultStrategy)}
+          onToggleMenu={() => setPullMenuOpen((v) => !v)}
+        />
+        {pullMenuOpen && (
+          <DropdownMenu onClose={() => setPullMenuOpen(false)}>
+            <MenuItem onClick={() => runPull("merge")}>Merge (default)</MenuItem>
+            <MenuItem onClick={() => runPull("rebase")}>Rebase</MenuItem>
+            <MenuItem onClick={() => runPull("ff-only")}>Fast-forward only</MenuItem>
+          </DropdownMenu>
+        )}
       </div>
-      {showPrDialog && <PRCreateDialog onClose={() => setShowPrDialog(false)} />}
-    </>
+      <div className="relative">
+        <SplitButton
+          label={busy === "push" ? "…" : `Push${status?.ahead ? ` (${status.ahead})` : ""}`}
+          disabled={!!busy || !currentBranch}
+          onClick={() => runPush(false)}
+          onToggleMenu={() => setPushMenuOpen((v) => !v)}
+        />
+        {pushMenuOpen && (
+          <DropdownMenu onClose={() => setPushMenuOpen(false)}>
+            <MenuItem onClick={() => runPush(false)}>Push</MenuItem>
+            <MenuItem onClick={() => runPush(true)}>Force push (with lease)</MenuItem>
+          </DropdownMenu>
+        )}
+      </div>
+    </div>
   );
-}
-
-async function deriveDefaultBranch(_remote: string): Promise<string> {
-  // Try gh first since it knows the authoritative default branch.
-  const info = await window.ghApi.repoInfo();
-  if (info.ok) return info.data.defaultBranch;
-  // Fallback heuristic.
-  const branches = await window.gitApi.branches();
-  if (branches.ok) {
-    for (const candidate of ["main", "master", "develop"]) {
-      if (branches.data.some((b) => b.name === candidate)) return candidate;
-    }
-  }
-  return "main";
 }
 
 function ToolbarButton({

@@ -128,6 +128,7 @@ export interface CommitOptions {
 export interface LogOptions {
   branch?: string;
   limit?: number;
+  skip?: number;
   all?: boolean;
 }
 
@@ -155,11 +156,17 @@ export interface PullRequest {
   body?: string;
 }
 
+// gh's schema for `pr checks --json` changed: old versions had `status` +
+// `conclusion`, newer ones expose `state` (pending|in_progress|success|
+// failure|skipped|cancelled|neutral) plus a derived `bucket` (pass|fail|
+// pending|skipping|cancel). We prefer the bucket for coloring since it
+// collapses the long state list into 5 categories.
 export interface Check {
   name: string;
-  status: "QUEUED" | "IN_PROGRESS" | "COMPLETED" | string;
-  conclusion: "SUCCESS" | "FAILURE" | "CANCELLED" | "SKIPPED" | "NEUTRAL" | string | null;
+  state: string;
+  bucket?: string;
   detailsUrl?: string;
+  workflow?: string;
 }
 
 export interface PRCreateOptions {

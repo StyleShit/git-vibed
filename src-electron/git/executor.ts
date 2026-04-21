@@ -160,7 +160,7 @@ export class GitExecutor {
     }
   }
 
-  async log(opts: { branch?: string; limit?: number; all?: boolean }) {
+  async log(opts: { branch?: string; limit?: number; skip?: number; all?: boolean }) {
     const args = [
       "log",
       ...(opts.all ? ["--all"] : []),
@@ -169,6 +169,7 @@ export class GitExecutor {
       "--date=unix",
       "--format=%H%x01%P%x01%an%x01%ae%x01%at%x01%D%x01%s%x02",
       ...(opts.limit ? [`-n${opts.limit}`] : ["-n500"]),
+      ...(opts.skip && opts.skip > 0 ? [`--skip=${opts.skip}`] : []),
       ...(opts.branch && !opts.all ? [opts.branch] : []),
     ];
     const raw = await this.git.raw(args);
@@ -332,6 +333,20 @@ export class GitExecutor {
     if (opts.prune ?? true) args.push("--prune");
     if (opts.all ?? !opts.remote) args.push("--all");
     else if (opts.remote) args.push(opts.remote);
+    return await this.git.raw(args);
+  }
+
+  // Push an arbitrary local branch. For the current branch this is a plain
+  // `git push`. For another branch we use a refspec so checkout isn't
+  // required. Setup-upstream on first push when no tracking is configured.
+  async pushBranch(localBranch: string, force = false): Promise<string> {
+    const remote = (await this.configGet(`branch.${localBranch}.remote`)) || "origin";
+    const upstream = await this.configGet(`branch.${localBranch}.merge`);
+    const remoteRef = upstream ? upstream.replace(/^refs\/heads\//, "") : localBranch;
+    const args = ["push"];
+    if (force) args.push("--force-with-lease");
+    if (!upstream) args.push("-u");
+    args.push(remote, `${localBranch}:${remoteRef}`);
     return await this.git.raw(args);
   }
 

@@ -115,6 +115,11 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   ipc.handle(GIT.PULL_BRANCH, (_e, branch: string) =>
     wrap(() => exec(repo).pullBranch(branch)),
   );
+  ipc.handle(
+    GIT.PUSH_BRANCH,
+    (_e, { branch, force }: { branch: string; force?: boolean }) =>
+      wrap(() => exec(repo).pushBranch(branch, force)),
+  );
 
   ipc.handle(GIT.REMOTES, () => wrap(() => exec(repo).remotes()));
   ipc.handle(GIT.REMOTE_ADD, (_e, { name, url }: { name: string; url: string }) =>

@@ -7,6 +7,7 @@ import { BranchContextMenu } from "./BranchContextMenu";
 import { BranchCreateDialog } from "./BranchCreateDialog";
 import { MergeRebaseDialog } from "./MergeRebaseDialog";
 import { Prompt } from "../ui/Prompt";
+import { PRCreateDialog } from "../github/PRCreateDialog";
 import {
   buildBranchTree,
   countBranches,
@@ -24,6 +25,7 @@ export function BranchList({ filter }: { filter: string }) {
     useState<{ kind: "merge" | "rebase"; source: string } | null>(null);
   const [renaming, setRenaming] = useState<Branch | null>(null);
   const [pulling, setPulling] = useState<string | null>(null);
+  const [prHead, setPrHead] = useState<string | null>(null);
   // Inverse-of-expanded: tracking collapse is simpler than remembering every
   // folder the user has expanded on big repos. This state is respected even
   // when a filter is active, so the user can always collapse a folder.
@@ -163,6 +165,7 @@ export function BranchList({ filter }: { filter: string }) {
           onMerge={(src) => setMergeDialog({ kind: "merge", source: src })}
           onRebase={(src) => setMergeDialog({ kind: "rebase", source: src })}
           onRename={(b) => setRenaming(b)}
+          onOpenPR={(b) => setPrHead(b.name)}
         />
       )}
       {showCreate && <BranchCreateDialog onClose={() => setShowCreate(false)} />}
@@ -182,6 +185,9 @@ export function BranchList({ filter }: { filter: string }) {
           onSubmit={handleRename}
           onCancel={() => setRenaming(null)}
         />
+      )}
+      {prHead && (
+        <PRCreateDialog headBranch={prHead} onClose={() => setPrHead(null)} />
       )}
     </div>
   );

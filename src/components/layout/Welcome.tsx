@@ -46,6 +46,7 @@ export function Welcome() {
   return (
     <div
       className="flex h-screen w-screen items-center justify-center bg-neutral-950 text-neutral-100"
+      style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -54,6 +55,7 @@ export function Welcome() {
       onDrop={onDrop}
     >
       <div
+        style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
         className={`w-[480px] rounded-xl border border-neutral-800 bg-neutral-900 p-8 shadow-2xl transition ${
           dragOver ? "ring-2 ring-indigo-500" : ""
         }`}

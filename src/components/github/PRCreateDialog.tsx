@@ -4,14 +4,23 @@ import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap, maybe } from "../../lib/ipc";
 
-export function PRCreateDialog({ onClose }: { onClose: () => void }) {
+export function PRCreateDialog({
+  onClose,
+  headBranch,
+}: {
+  onClose: () => void;
+  // Override which branch gets used as the PR head. When omitted we fall
+  // back to the currently checked-out branch, matching the older UX.
+  headBranch?: string;
+}) {
   const { status, branches } = useActiveTabShallow((t) => ({
     status: t?.status ?? null,
     branches: t?.branches ?? [],
   }));
   const refreshPRs = useRepo((s) => s.refreshPRs);
   const toast = useUI((s) => s.toast);
-  const [title, setTitle] = useState(status?.branch ?? "");
+  const head = headBranch ?? status?.branch ?? "";
+  const [title, setTitle] = useState(head);
   const [body, setBody] = useState("");
   const [base, setBase] = useState("main");
   const [draft, setDraft] = useState(false);
@@ -27,8 +36,6 @@ export function PRCreateDialog({ onClose }: { onClose: () => void }) {
       if (c) setCollabs(c);
     })();
   }, []);
-
-  const head = status?.branch ?? "";
 
   async function create() {
     setBusy(true);
@@ -66,7 +73,7 @@ export function PRCreateDialog({ onClose }: { onClose: () => void }) {
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-neutral-400">Head (current)</label>
+          <label className="mb-1 block text-neutral-400">Head</label>
           <input
             disabled
             value={head}

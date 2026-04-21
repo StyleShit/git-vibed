@@ -29,6 +29,7 @@ export const GIT = {
   PUSH: "git:push",
   FETCH: "git:fetch",
   PULL_BRANCH: "git:pull-branch",
+  PUSH_BRANCH: "git:push-branch",
   REMOTES: "git:remotes",
   REMOTE_ADD: "git:remote-add",
   REMOTE_REMOVE: "git:remote-remove",
