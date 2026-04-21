@@ -723,28 +723,43 @@ export class GitExecutor {
     return await this.git.raw(args);
   }
 
-  // Render an untracked file as if it were being added. `git diff
-  // --no-index` exits 1 when the inputs differ (always, here), so we
-  // call git directly and treat exit 1 as a normal success.
+  // Render an untracked file as if it were being added. We synthesize the
+  // unified-diff output by hand instead of calling `git diff --no-index`,
+  // which emits a non-standard header (`diff --git /dev/null b/foo`,
+  // without the `a/` prefix) that our shared parser won't recognize.
+  // Reading the file directly also lets us bail early on binary blobs
+  // using a quick null-byte heuristic.
   private async untrackedDiff(file: string): Promise<string> {
-    return new Promise<string>((resolve) => {
-      const child = execFile(
-        "git",
-        ["diff", "--no-index", "--no-color", "-U3", "--", "/dev/null", file],
-        { cwd: this.repoPath, maxBuffer: 64 * 1024 * 1024 },
-        (err, stdout) => {
-          // exit 0 = identical (won't happen since source is /dev/null),
-          // exit 1 = differs (our success case), exit >1 = actual error.
-          const code = (err as { code?: number } | null)?.code;
-          if (err && code !== 1) {
-            resolve("");
-            return;
-          }
-          resolve(stdout?.toString() ?? "");
-        },
-      );
-      child.on("error", () => resolve(""));
-    });
+    const abs = path.join(this.repoPath, file);
+    let content: Buffer;
+    try {
+      content = await fs.promises.readFile(abs);
+    } catch {
+      return "";
+    }
+    // Directories or dangling symlinks show up as ENOENT / EISDIR above
+    // — nothing to render if the read failed.
+    const header = [
+      `diff --git a/${file} b/${file}`,
+      "new file mode 100644",
+      "--- /dev/null",
+      `+++ b/${file}`,
+    ].join("\n");
+    // Binary heuristic: git uses a similar null-byte scan in the first 8KB
+    // before deciding whether to emit "Binary files … differ".
+    const sniff = content.subarray(0, Math.min(content.length, 8 * 1024));
+    if (sniff.includes(0)) {
+      return `${header}\nBinary files /dev/null and b/${file} differ\n`;
+    }
+    const text = content.toString("utf8");
+    if (text.length === 0) return `${header}\n`;
+    const hasTrailingNewline = text.endsWith("\n");
+    const lines = text.split("\n");
+    if (hasTrailingNewline) lines.pop();
+    const count = lines.length;
+    const body = lines.map((l) => `+${l}`).join("\n");
+    const tail = hasTrailingNewline ? "" : "\n\\ No newline at end of file";
+    return `${header}\n@@ -0,0 +1,${count} @@\n${body}${tail}\n`;
   }
 
   async fileAtRef(ref: string, filePath: string): Promise<string> {
