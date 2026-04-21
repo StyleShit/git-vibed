@@ -56,6 +56,23 @@ function emptyTab(path: string): TabData {
   };
 }
 
+// Mirror the current tab list + active pointer to main so next launch can
+// restore exactly what the user had open. Debounced via microtask so a burst
+// of mutations only writes once.
+let sessionWriteQueued = false;
+function queueSessionWrite(state: RepoState) {
+  if (sessionWriteQueued) return;
+  sessionWriteQueued = true;
+  queueMicrotask(() => {
+    sessionWriteQueued = false;
+    const snap = {
+      openPaths: state.tabs.map((t) => t.path),
+      activePath: state.tabs[state.activeIdx]?.path ?? null,
+    };
+    void window.gitApi.sessionSet(snap);
+  });
+}
+
 export const useRepo = create<RepoState>((set, get) => ({
   tabs: [],
   activeIdx: -1,
@@ -83,6 +100,7 @@ export const useRepo = create<RepoState>((set, get) => ({
         tabs: [...s.tabs, { ...emptyTab(resolved), ghAvailable }],
         activeIdx: s.tabs.length,
       }));
+      queueSessionWrite(get());
       await get().refreshAll(resolved);
       get().patchTab(resolved, { loading: false });
     } finally {
@@ -105,6 +123,7 @@ export const useRepo = create<RepoState>((set, get) => ({
     // Sync main's "active" pointer to match the new active tab.
     const next = get().tabs[get().activeIdx];
     if (next) await maybe(window.gitApi.setActiveRepo(next.path));
+    queueSessionWrite(get());
   },
 
   setActive: async (idx) => {
@@ -114,6 +133,7 @@ export const useRepo = create<RepoState>((set, get) => ({
     // so subsequent IPC calls hit the right session.
     await maybe(window.gitApi.setActiveRepo(tab.path));
     set({ activeIdx: idx });
+    queueSessionWrite(get());
   },
 
   patchTab: (path, patch) => {

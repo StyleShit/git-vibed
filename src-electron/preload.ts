@@ -35,6 +35,10 @@ const gitApi = {
   showOpenDialog: () => invoke<string>(GIT.SHOW_OPEN_DIALOG),
   openExternal: (url: string) => invoke<boolean>(GIT.OPEN_EXTERNAL, url),
   recentRepos: () => invoke<string[]>(GIT.RECENT_REPOS),
+  sessionGet: () =>
+    invoke<{ openPaths: string[]; activePath: string | null }>(GIT.SESSION_GET),
+  sessionSet: (snap: { openPaths: string[]; activePath: string | null }) =>
+    invoke<boolean>(GIT.SESSION_SET, snap),
 
   status: () => invoke<RepoStatus>(GIT.STATUS),
   commit: (opts: CommitOptions) => invoke<string>(GIT.COMMIT, opts),

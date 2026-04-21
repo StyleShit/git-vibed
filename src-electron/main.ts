@@ -28,6 +28,15 @@ function recentReposPath() {
   return path.join(app.getPath("userData"), "recent-repos.json");
 }
 
+function sessionPath() {
+  return path.join(app.getPath("userData"), "session.json");
+}
+
+interface SessionSnapshot {
+  openPaths: string[];
+  activePath: string | null;
+}
+
 function loadRecentRepos(): string[] {
   try {
     const raw = fs.readFileSync(recentReposPath(), "utf8");
@@ -51,6 +60,31 @@ function addRecentRepo(repoPath: string) {
   const existing = loadRecentRepos().filter((p) => p !== repoPath);
   existing.unshift(repoPath);
   saveRecentRepos(existing);
+}
+
+// Session is what was *open* at last quit — separate from the MRU recents
+// list so closing the last tab doesn't force it to re-open next launch.
+function loadSession(): SessionSnapshot {
+  try {
+    const raw = fs.readFileSync(sessionPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    const openPaths = Array.isArray(parsed?.openPaths)
+      ? (parsed.openPaths as unknown[]).filter((p): p is string => typeof p === "string")
+      : [];
+    const activePath = typeof parsed?.activePath === "string" ? parsed.activePath : null;
+    return { openPaths, activePath };
+  } catch {
+    return { openPaths: [], activePath: null };
+  }
+}
+
+function saveSession(snap: SessionSnapshot) {
+  try {
+    fs.mkdirSync(path.dirname(sessionPath()), { recursive: true });
+    fs.writeFileSync(sessionPath(), JSON.stringify(snap));
+  } catch {
+    // Non-fatal.
+  }
 }
 
 function createWindow() {
@@ -122,6 +156,16 @@ app.whenReady().then(() => {
     ok: true as const,
     data: loadRecentRepos(),
   }));
+
+  ipcMain.handle(GIT.SESSION_GET, () => ({
+    ok: true as const,
+    data: loadSession(),
+  }));
+
+  ipcMain.handle(GIT.SESSION_SET, (_e, snap: SessionSnapshot) => {
+    saveSession(snap);
+    return { ok: true as const, data: true };
+  });
 
   // Track new repo opens so the sidebar's recent list stays warm.
   repoManager.onRepoOpen((p) => addRecentRepo(p));

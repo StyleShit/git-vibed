@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import type { FileDiff } from "@shared/types";
+import { useEffect, useMemo, useState } from "react";
+import type { DiffHunk, DiffLine, FileDiff } from "@shared/types";
 import { unwrap } from "../../lib/ipc";
 import { useUI } from "../../stores/ui";
 import { useRepo } from "../../stores/repo";
+import { useSettings } from "../../stores/settings";
 import { buildHunkPatch, buildLinePatch } from "../../lib/patch-builder";
 
 interface Props {
@@ -10,11 +11,17 @@ interface Props {
   staged: boolean;
 }
 
+// Per-line selection key: hunkIdx:lineIdx. Same identifier works for either
+// view mode so toggling the layout doesn't clear selection.
+const key = (h: number, l: number) => `${h}:${l}`;
+
 export function DiffViewer({ file, staged }: Props) {
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const toast = useUI((s) => s.toast);
   const refreshStatus = useRepo((s) => s.refreshStatus);
+  const viewMode = useSettings((s) => s.diffViewMode);
+  const setViewMode = useSettings((s) => s.setDiffViewMode);
 
   useEffect(() => {
     setDiff(null);
@@ -29,29 +36,19 @@ export function DiffViewer({ file, staged }: Props) {
     })();
   }, [file, staged, toast]);
 
-  if (!diff) {
-    return <div className="p-4 text-sm text-neutral-500">Loading diff…</div>;
-  }
-  if (diff.binary) {
-    return <div className="p-4 text-sm text-neutral-500">Binary file — diff not shown</div>;
-  }
-  if (diff.hunks.length === 0) {
-    return <div className="p-4 text-sm text-neutral-500">No changes</div>;
-  }
-
-  const toggleLine = (hunkIdx: number, lineIdx: number) => {
-    const key = `${hunkIdx}:${lineIdx}`;
+  const toggleLine = (h: number, l: number) =>
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      const k = key(h, l);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
       return next;
     });
-  };
 
   async function applyHunk(hunkIdx: number) {
+    if (!diff) return;
     try {
-      const patch = buildHunkPatch(diff!.path, diff!.hunks[hunkIdx], diff!.oldPath);
+      const patch = buildHunkPatch(diff.path, diff.hunks[hunkIdx], diff.oldPath);
       if (staged) await unwrap(window.gitApi.unstagePatch(patch));
       else await unwrap(window.gitApi.stagePatch(patch));
       await refreshStatus();
@@ -61,17 +58,17 @@ export function DiffViewer({ file, staged }: Props) {
   }
 
   async function applySelectedLines() {
+    if (!diff) return;
     try {
-      // Build patches per hunk then concatenate.
       const patches: string[] = [];
-      for (let h = 0; h < diff!.hunks.length; h++) {
-        const hunk = diff!.hunks[h];
+      for (let h = 0; h < diff.hunks.length; h++) {
+        const hunk = diff.hunks[h];
         const indexes = new Set<number>();
         for (let i = 0; i < hunk.lines.length; i++) {
-          if (selected.has(`${h}:${i}`)) indexes.add(i);
+          if (selected.has(key(h, i))) indexes.add(i);
         }
         if (indexes.size === 0) continue;
-        const patch = buildLinePatch(diff!.path, hunk, indexes, diff!.oldPath);
+        const patch = buildLinePatch(diff.path, hunk, indexes, diff.oldPath);
         if (patch) patches.push(patch);
       }
       if (patches.length === 0) {
@@ -87,6 +84,10 @@ export function DiffViewer({ file, staged }: Props) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
   }
+
+  if (!diff) return <div className="p-4 text-sm text-neutral-500">Loading diff…</div>;
+  if (diff.binary) return <div className="p-4 text-sm text-neutral-500">Binary file — diff not shown</div>;
+  if (diff.hunks.length === 0) return <div className="p-4 text-sm text-neutral-500">No changes</div>;
 
   const anySelected = selected.size > 0;
   const totalAdds = diff.hunks.reduce(
@@ -108,6 +109,7 @@ export function DiffViewer({ file, staged }: Props) {
         <div className="flex items-center gap-3">
           <span className="text-emerald-400">+{totalAdds}</span>
           <span className="text-red-400">−{totalDels}</span>
+          <ViewToggle value={viewMode} onChange={setViewMode} />
           <button
             onClick={applySelectedLines}
             disabled={!anySelected}
@@ -129,49 +131,238 @@ export function DiffViewer({ file, staged }: Props) {
                 {staged ? "Unstage hunk" : "Stage hunk"}
               </button>
             </div>
-            <table className="w-full">
-              <tbody>
-                {hunk.lines.map((l, lIdx) => {
-                  const key = `${hIdx}:${lIdx}`;
-                  const bg =
-                    l.type === "add"
-                      ? "bg-emerald-900/25"
-                      : l.type === "del"
-                        ? "bg-red-900/25"
-                        : "";
-                  const selectable = l.type !== "context";
-                  const isSelected = selected.has(key);
-                  return (
-                    <tr
-                      key={lIdx}
-                      className={`${bg} ${selectable ? "cursor-pointer hover:bg-neutral-800/40" : ""} ${isSelected ? "ring-1 ring-indigo-500" : ""}`}
-                      onClick={() => selectable && toggleLine(hIdx, lIdx)}
-                    >
-                      <td className="w-8 px-2 text-right text-neutral-600">
-                        {selectable && (
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleLine(hIdx, lIdx)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
-                        )}
-                      </td>
-                      <td className="w-10 px-2 text-right text-neutral-600">{l.oldLineNo ?? ""}</td>
-                      <td className="w-10 px-2 text-right text-neutral-600">{l.newLineNo ?? ""}</td>
-                      <td className="w-4 text-center text-neutral-500">
-                        {l.type === "add" ? "+" : l.type === "del" ? "−" : " "}
-                      </td>
-                      <td className="whitespace-pre px-1 text-neutral-200">{l.content}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            {viewMode === "unified" ? (
+              <UnifiedHunk hunk={hunk} hunkIdx={hIdx} selected={selected} onToggle={toggleLine} />
+            ) : (
+              <SplitHunk hunk={hunk} hunkIdx={hIdx} selected={selected} onToggle={toggleLine} />
+            )}
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function ViewToggle({
+  value,
+  onChange,
+}: {
+  value: "unified" | "split";
+  onChange: (v: "unified" | "split") => void;
+}) {
+  return (
+    <div className="inline-flex overflow-hidden rounded border border-neutral-700 text-[11px]">
+      <button
+        onClick={() => onChange("unified")}
+        className={`px-2 py-0.5 ${
+          value === "unified" ? "bg-neutral-700 text-neutral-100" : "text-neutral-400 hover:text-neutral-200"
+        }`}
+      >
+        Unified
+      </button>
+      <button
+        onClick={() => onChange("split")}
+        className={`px-2 py-0.5 ${
+          value === "split" ? "bg-neutral-700 text-neutral-100" : "text-neutral-400 hover:text-neutral-200"
+        }`}
+      >
+        Split
+      </button>
+    </div>
+  );
+}
+
+function UnifiedHunk({
+  hunk,
+  hunkIdx,
+  selected,
+  onToggle,
+}: {
+  hunk: DiffHunk;
+  hunkIdx: number;
+  selected: Set<string>;
+  onToggle: (h: number, l: number) => void;
+}) {
+  return (
+    <table className="w-full">
+      <tbody>
+        {hunk.lines.map((l, lIdx) => {
+          const k = key(hunkIdx, lIdx);
+          const bg =
+            l.type === "add"
+              ? "bg-emerald-900/25"
+              : l.type === "del"
+                ? "bg-red-900/25"
+                : "";
+          const selectable = l.type !== "context";
+          const isSelected = selected.has(k);
+          return (
+            <tr
+              key={lIdx}
+              className={`${bg} ${selectable ? "cursor-pointer hover:bg-neutral-800/40" : ""} ${isSelected ? "ring-1 ring-indigo-500" : ""}`}
+              onClick={() => selectable && onToggle(hunkIdx, lIdx)}
+            >
+              <td className="w-8 px-2 text-right text-neutral-600">
+                {selectable && (
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggle(hunkIdx, lIdx)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-3 w-3"
+                  />
+                )}
+              </td>
+              <td className="w-10 px-2 text-right text-neutral-600">{l.oldLineNo ?? ""}</td>
+              <td className="w-10 px-2 text-right text-neutral-600">{l.newLineNo ?? ""}</td>
+              <td className="w-4 text-center text-neutral-500">
+                {l.type === "add" ? "+" : l.type === "del" ? "−" : " "}
+              </td>
+              <td className="whitespace-pre px-1 text-neutral-200">{l.content}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// Pair adjacent del/add lines into a single row so modifications display
+// side-by-side. Unmatched dels/adds fill just one side of the row.
+interface SplitRow {
+  left: { line: DiffLine; idx: number } | null;
+  right: { line: DiffLine; idx: number } | null;
+}
+
+function buildSplitRows(hunk: DiffHunk): SplitRow[] {
+  const rows: SplitRow[] = [];
+  let pendingDels: Array<{ line: DiffLine; idx: number }> = [];
+  const flushDels = () => {
+    for (const d of pendingDels) rows.push({ left: d, right: null });
+    pendingDels = [];
+  };
+  for (let i = 0; i < hunk.lines.length; i++) {
+    const line = hunk.lines[i];
+    if (line.type === "context") {
+      flushDels();
+      rows.push({ left: { line, idx: i }, right: { line, idx: i } });
+    } else if (line.type === "del") {
+      pendingDels.push({ line, idx: i });
+    } else if (line.type === "add") {
+      const pair = pendingDels.shift();
+      if (pair) rows.push({ left: pair, right: { line, idx: i } });
+      else rows.push({ left: null, right: { line, idx: i } });
+    }
+  }
+  flushDels();
+  return rows;
+}
+
+function SplitHunk({
+  hunk,
+  hunkIdx,
+  selected,
+  onToggle,
+}: {
+  hunk: DiffHunk;
+  hunkIdx: number;
+  selected: Set<string>;
+  onToggle: (h: number, l: number) => void;
+}) {
+  const rows = useMemo(() => buildSplitRows(hunk), [hunk]);
+  return (
+    <table className="w-full table-fixed">
+      <colgroup>
+        <col style={{ width: "3.25rem" }} />
+        <col style={{ width: "calc(50% - 1.625rem)" }} />
+        <col style={{ width: "3.25rem" }} />
+        <col style={{ width: "calc(50% - 1.625rem)" }} />
+      </colgroup>
+      <tbody>
+        {rows.map((row, rIdx) => (
+          <tr key={rIdx}>
+            <SideCell side="left" cell={row.left} hunkIdx={hunkIdx} selected={selected} onToggle={onToggle} />
+            <ContentCell
+              side="left"
+              cell={row.left}
+              hunkIdx={hunkIdx}
+              selected={selected}
+              onToggle={onToggle}
+            />
+            <SideCell side="right" cell={row.right} hunkIdx={hunkIdx} selected={selected} onToggle={onToggle} />
+            <ContentCell
+              side="right"
+              cell={row.right}
+              hunkIdx={hunkIdx}
+              selected={selected}
+              onToggle={onToggle}
+            />
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// Line-number + sign gutter. Kept narrow and monospace.
+function SideCell({
+  side,
+  cell,
+  hunkIdx,
+  selected,
+  onToggle,
+}: {
+  side: "left" | "right";
+  cell: SplitRow["left"];
+  hunkIdx: number;
+  selected: Set<string>;
+  onToggle: (h: number, l: number) => void;
+}) {
+  if (!cell) return <td className="bg-neutral-900/40" />;
+  const { line, idx } = cell;
+  const isSelectable = line.type !== "context";
+  const isSelected = selected.has(key(hunkIdx, idx));
+  const lineNo = side === "left" ? line.oldLineNo : line.newLineNo;
+  const sign = line.type === "add" ? "+" : line.type === "del" ? "−" : " ";
+  return (
+    <td
+      onClick={() => isSelectable && onToggle(hunkIdx, idx)}
+      className={`px-2 text-right align-top text-neutral-600 ${isSelectable ? "cursor-pointer" : ""} ${isSelected ? "ring-1 ring-indigo-500" : ""}`}
+    >
+      <span className="inline-block w-6 pr-1">{lineNo ?? ""}</span>
+      <span className="inline-block w-3 text-center">{sign}</span>
+    </td>
+  );
+}
+
+function ContentCell({
+  cell,
+  hunkIdx,
+  selected,
+  onToggle,
+}: {
+  side: "left" | "right";
+  cell: SplitRow["left"];
+  hunkIdx: number;
+  selected: Set<string>;
+  onToggle: (h: number, l: number) => void;
+}) {
+  if (!cell) return <td className="bg-neutral-900/40" />;
+  const { line, idx } = cell;
+  const isSelectable = line.type !== "context";
+  const isSelected = selected.has(key(hunkIdx, idx));
+  const bg =
+    line.type === "add"
+      ? "bg-emerald-900/25"
+      : line.type === "del"
+        ? "bg-red-900/25"
+        : "";
+  return (
+    <td
+      onClick={() => isSelectable && onToggle(hunkIdx, idx)}
+      className={`whitespace-pre px-2 text-neutral-200 ${bg} ${isSelectable ? "cursor-pointer hover:bg-neutral-800/40" : ""} ${isSelected ? "ring-1 ring-indigo-500" : ""}`}
+    >
+      {line.content}
+    </td>
   );
 }

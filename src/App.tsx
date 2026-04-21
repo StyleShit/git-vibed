@@ -67,18 +67,26 @@ export function App() {
     };
   }, [toast]);
 
-  // Restore the most recent repo as a first tab on cold boot. Subsequent tabs
-  // are user-driven (via the Welcome screen or the + button).
+  // Restore whatever the user had open when they last quit. If the session
+  // file is empty (first run or everything was closed before quit), drop to
+  // the Welcome screen rather than opening a random recent repo.
   useEffect(() => {
     if (tabs.length > 0) return;
     void (async () => {
-      const recent = await window.gitApi.recentRepos();
-      if (recent.ok && recent.data.length > 0) {
+      const res = await window.gitApi.sessionGet();
+      if (!res.ok) return;
+      const { openPaths, activePath } = res.data;
+      if (openPaths.length === 0) return;
+      for (const p of openPaths) {
         try {
-          await useRepo.getState().openRepo(recent.data[0]);
+          await useRepo.getState().openRepo(p);
         } catch {
-          // Ignore — user picks again via Welcome.
+          // Skip paths that no longer exist / aren't repos anymore.
         }
+      }
+      if (activePath) {
+        const idx = useRepo.getState().tabs.findIndex((t) => t.path === activePath);
+        if (idx !== -1) await useRepo.getState().setActive(idx);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

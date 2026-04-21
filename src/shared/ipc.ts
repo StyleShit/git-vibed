@@ -48,6 +48,8 @@ export const GIT = {
   CLOSE_REPO: "git:close-repo",
   SET_ACTIVE_REPO: "git:set-active-repo",
   OPEN_REPOS: "git:open-repos",
+  SESSION_GET: "git:session-get",
+  SESSION_SET: "git:session-set",
 } as const;
 
 export const GH = {
