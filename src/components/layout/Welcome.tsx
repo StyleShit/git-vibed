@@ -33,7 +33,7 @@ export function Welcome({ overlay = false }: { overlay?: boolean }) {
   function launchOpen(p: string) {
     close();
     void open(p).catch((e) =>
-      toast("error", e instanceof Error ? e.message : String(e)),
+      toast("error", e instanceof Error ? e.message : String(e))
     );
   }
 
@@ -54,7 +54,9 @@ export function Welcome({ overlay = false }: { overlay?: boolean }) {
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0] as (File & { path?: string }) | undefined;
+    const file = e.dataTransfer.files[0] as
+      | (File & { path?: string })
+      | undefined;
     if (file?.path) void openPath(file.path);
   }
 
@@ -78,7 +80,9 @@ export function Welcome({ overlay = false }: { overlay?: boolean }) {
     <div
       className={container}
       style={containerStyle}
-      onClick={overlay ? (e) => e.target === e.currentTarget && close() : undefined}
+      onClick={
+        overlay ? (e) => e.target === e.currentTarget && close() : undefined
+      }
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -106,7 +110,7 @@ export function Welcome({ overlay = false }: { overlay?: boolean }) {
           <div className="flex size-12 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300">
             <BranchIcon className="size-6" />
           </div>
-          <h1 className="text-xl font-semibold">git-vibed</h1>
+          <h1 className="text-xl font-semibold">Git Vibed</h1>
           <p className="text-center text-sm text-neutral-400">
             {overlay
               ? "Open another repository to work on."

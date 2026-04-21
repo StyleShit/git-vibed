@@ -2,7 +2,13 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 type BranchKind = "local" | "remote";
-type SidebarSectionId = "local" | "remote" | "stashes" | "worktrees" | "prs" | "tags";
+type SidebarSectionId =
+  | "local"
+  | "remote"
+  | "stashes"
+  | "worktrees"
+  | "prs"
+  | "tags";
 
 interface SettingsState {
   theme: "dark" | "light" | "system";
@@ -55,9 +61,12 @@ export const useSettings = create<SettingsState>()(
       collapsedSidebarSections: ["tags"],
       collapsedBranchFolders: { local: [], remote: [] },
       setTheme: (theme) => set({ theme }),
-      setAutoFetchIntervalMs: (autoFetchIntervalMs) => set({ autoFetchIntervalMs }),
-      setDefaultPullStrategy: (defaultPullStrategy) => set({ defaultPullStrategy }),
-      setSkipHooksByDefault: (skipHooksByDefault) => set({ skipHooksByDefault }),
+      setAutoFetchIntervalMs: (autoFetchIntervalMs) =>
+        set({ autoFetchIntervalMs }),
+      setDefaultPullStrategy: (defaultPullStrategy) =>
+        set({ defaultPullStrategy }),
+      setSkipHooksByDefault: (skipHooksByDefault) =>
+        set({ skipHooksByDefault }),
       setDiffViewMode: (diffViewMode) => set({ diffViewMode }),
       setFileListViewMode: (fileListViewMode) => set({ fileListViewMode }),
       setSidebarWidth: (sidebarWidth) =>
@@ -68,9 +77,12 @@ export const useSettings = create<SettingsState>()(
         set({ collapsedSidebarSections }),
       setCollapsedBranchFolders: (kind, paths) =>
         set((s) => ({
-          collapsedBranchFolders: { ...s.collapsedBranchFolders, [kind]: paths },
+          collapsedBranchFolders: {
+            ...s.collapsedBranchFolders,
+            [kind]: paths,
+          },
         })),
     }),
-    { name: "git-vibed-settings" },
-  ),
+    { name: "Git Vibed-settings" }
+  )
 );

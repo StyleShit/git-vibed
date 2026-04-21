@@ -98,7 +98,9 @@ export function App() {
         }
       }
       if (activePath) {
-        const idx = useRepo.getState().tabs.findIndex((t) => t.path === activePath);
+        const idx = useRepo
+          .getState()
+          .tabs.findIndex((t) => t.path === activePath);
         if (idx !== -1) await useRepo.getState().setActive(idx);
       }
     })();
@@ -109,10 +111,12 @@ export function App() {
   useEffect(() => {
     if (activeTab) {
       const folder = activeTab.path.split(/[\\/]/).pop();
-      const branch = activeTab.status?.branch ? ` — ${activeTab.status.branch}` : "";
-      document.title = `${folder}${branch} · git-vibed`;
+      const branch = activeTab.status?.branch
+        ? ` — ${activeTab.status.branch}`
+        : "";
+      document.title = `${folder}${branch} · Git Vibed`;
     } else {
-      document.title = "git-vibed";
+      document.title = "Git Vibed";
     }
   }, [activeTab?.path, activeTab?.status?.branch]);
 

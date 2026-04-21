@@ -1,6 +1,6 @@
 ---
-name: git-vibed
-overview: Build git-vibed, a cross-platform Git client using Electron + React + TypeScript, wrapping system git and gh CLI, with smart conflict resolution, branch graph visualization, staging management, and GitHub integration.
+name: Git Vibed
+overview: Build Git Vibed, a cross-platform Git client using Electron + React + TypeScript, wrapping system git and gh CLI, with smart conflict resolution, branch graph visualization, staging management, and GitHub integration.
 todos:
   - id: scaffold
     content: Scaffold Electron + React + Vite + TypeScript + Tailwind project structure
@@ -59,7 +59,7 @@ todos:
 isProject: false
 ---
 
-# git-vibed — Full Build Plan
+# Git Vibed — Full Build Plan
 
 ## Stack
 

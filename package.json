@@ -40,7 +40,7 @@
   },
   "build": {
     "appId": "com.gitvibed.app",
-    "productName": "git-vibed",
+    "productName": "Git Vibed",
     "directories": {
       "output": "release"
     },
