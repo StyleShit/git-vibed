@@ -4,7 +4,12 @@ import { fileURLToPath } from "node:url";
 import { registerGitHandlers } from "./ipc/git-handlers.js";
 import { registerGhHandlers } from "./ipc/gh-handlers.js";
 import { RepoManager } from "./git/repo-manager.js";
+import { fixPath } from "./fix-path.js";
 import { GIT } from "../src/shared/ipc.js";
+
+// Must run before any child_process spawn — git hooks (husky → pnpm, etc.)
+// rely on PATH, which is stripped when Electron is launched from Finder.
+fixPath();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,6 +21,19 @@ const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, "public")
   : RENDERER_DIST;
+
+// In dev, Electron reads its own bundled package.json, so `app.getName()`
+// returns "Electron" — which leaks into the macOS menu bar, window titles,
+// and the Windows taskbar grouping. Pin the name so dev matches prod.
+app.setName("Git Vibed");
+if (process.platform === "win32") app.setAppUserModelId("com.gitvibed.app");
+
+// Icon path used by the BrowserWindow (Windows/Linux) and the macOS dock.
+// In dev the PNG is served from /public; in prod it sits next to index.html
+// in RENDERER_DIST. The packaged .icns/.ico takes over for prod macOS/Windows.
+const APP_ICON_PATH = VITE_DEV_SERVER_URL
+  ? path.join(process.env.APP_ROOT, "public", "logo.png")
+  : path.join(RENDERER_DIST, "logo.png");
 
 // Don't crash the app on a stray async error from a dependency (chokidar
 // throwing EMFILE on a huge repo, a gh subprocess failing, etc.). Log and
@@ -103,7 +121,9 @@ function createWindow() {
     height: 900,
     minWidth: 900,
     minHeight: 600,
+    title: "Git Vibed",
     backgroundColor: "#0a0a0a",
+    icon: APP_ICON_PATH,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -131,6 +151,13 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Dev builds run the stock Electron binary, so the dock icon is the default
+  // Electron mark until we override it at runtime. Packaged builds ship with
+  // their own .icns, making this a no-op there.
+  if (process.platform === "darwin") {
+    app.dock?.setIcon(APP_ICON_PATH);
+  }
+
   repoManager = new RepoManager((channel, payload) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(channel, payload);

@@ -52,19 +52,22 @@
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "icon": "public/logo.png"
     },
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "public/logo.png"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "category": "Development"
+      "category": "Development",
+      "icon": "public/logo.png"
     }
   },
   "engines": {
