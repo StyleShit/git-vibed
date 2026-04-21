@@ -14,6 +14,8 @@ export function TabBar() {
   const setActive = useRepo((s) => s.setActive);
   const closeTab = useRepo((s) => s.closeTab);
   const setWelcomeOpen = useUI((s) => s.setWelcomeOpen);
+  const status = useRepo((s) => s.activeTab?.status);
+  const hasConflicts = (status?.conflicted.length ?? 0) > 0;
   const isMac =
     typeof navigator !== "undefined" && /Mac/.test(navigator.platform ?? "");
 
@@ -35,16 +37,28 @@ export function TabBar() {
           double-clicking this area zooms the window. */}
       {isMac && <div className="w-20 shrink-0" style={DRAG} />}
 
+      {/* Brand mark in the title-bar area — visible on every platform since
+          the OS-drawn title bar is either hidden (macOS hiddenInset) or shows
+          a tiny, pixelated icon (Windows/Linux). */}
+      <div
+        className="flex shrink-0 items-center px-2"
+        style={DRAG}
+        title="Git Vibed"
+      >
+        <img src="/logo.png" alt="Git Vibed" className="size-5 rounded" />
+      </div>
+
       {tabs.map((tab, idx) => {
         const isActive = idx === activeIdx;
         const folder = tab.path.split(/[\\/]/).pop() ?? tab.path;
         const branch = tab.status?.branch;
+        const tabHasConflicts = (tab.status?.conflicted.length ?? 0) > 0;
         return (
           <div
             key={tab.path}
             onClick={() => void setActive(idx)}
             onAuxClick={(e) => {
-              if (e.button === 1) void closeTab(tab.path);
+              if (e.button === 1 && !hasConflicts) void closeTab(tab.path);
             }}
             title={tab.path}
             style={NO_DRAG}
@@ -63,9 +77,15 @@ export function TabBar() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                void closeTab(tab.path);
+                if (!tabHasConflicts) void closeTab(tab.path);
               }}
-              className="ml-auto rounded px-1 text-neutral-500 opacity-0 transition hover:bg-neutral-800 hover:text-neutral-100 group-hover:opacity-100"
+              disabled={tabHasConflicts}
+              title={tabHasConflicts ? "Cannot close tab with unresolved conflicts" : undefined}
+              className={`ml-auto rounded px-1 opacity-0 transition group-hover:opacity-100 ${
+                tabHasConflicts
+                  ? "cursor-not-allowed text-neutral-600"
+                  : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-100"
+              }`}
               aria-label={`Close ${folder}`}
             >
               ×

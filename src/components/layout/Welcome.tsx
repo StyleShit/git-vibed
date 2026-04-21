@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
-import { BranchIcon, CloseIcon, FolderIcon, PlusIcon } from "../ui/Icons";
+import { CloseIcon, FolderIcon, PlusIcon } from "../ui/Icons";
 
 // Landing screen shown on cold start (when no repos are open) and as an
 // overlay when the user clicks the "+" in the tab bar. The overlay form
@@ -107,9 +107,11 @@ export function Welcome({ overlay = false }: { overlay?: boolean }) {
         )}
 
         <div className="flex flex-col items-center gap-2 border-b border-neutral-800 px-8 pb-6 pt-10">
-          <div className="flex size-12 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300">
-            <BranchIcon className="size-6" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="Git Vibed"
+            className="size-12 rounded-xl"
+          />
           <h1 className="text-xl font-semibold">Git Vibed</h1>
           <p className="text-center text-sm text-neutral-400">
             {overlay
@@ -118,7 +120,11 @@ export function Welcome({ overlay = false }: { overlay?: boolean }) {
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 px-8 pt-5">
+        <div
+          className={`flex flex-col gap-2 px-8 pt-5 ${
+            recent.length > 0 ? "" : "pb-6"
+          }`}
+        >
           <button
             onClick={browse}
             className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 py-2.5 text-sm font-medium text-white hover:bg-indigo-500"

@@ -191,6 +191,43 @@ export function ChevronRightIcon(p: IconProps) {
   );
 }
 
+export function ChevronUpIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m4 10 4-4 4 4" />
+    </Svg>
+  );
+}
+
+export function MagicWandIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m3 13 8-8 2 2-8 8z" />
+      <path d="m9 5 2 2" />
+      <path d="M6 2v2M5 3h2" />
+      <path d="M13 9v2M12 10h2" />
+    </Svg>
+  );
+}
+
+export function ArrowLeftIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m7 4-3 4 3 4" />
+      <path d="M4 8h9" />
+    </Svg>
+  );
+}
+
+export function ArrowRightIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m9 4 3 4-3 4" />
+      <path d="M3 8h9" />
+    </Svg>
+  );
+}
+
 export function PlusIcon(p: IconProps) {
   return (
     <Svg {...p}>
