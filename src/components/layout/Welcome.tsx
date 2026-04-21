@@ -108,7 +108,7 @@ export function Welcome({ overlay = false }: { overlay?: boolean }) {
 
         <div className="flex flex-col items-center gap-2 border-b border-neutral-800 px-8 pb-6 pt-10">
           <img
-            src="/logo.png"
+            src="./logo.png"
             alt="Git Vibed"
             className="size-12 rounded-xl"
           />

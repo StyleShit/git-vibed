@@ -45,7 +45,7 @@ export function TabBar() {
         style={DRAG}
         title="Git Vibed"
       >
-        <img src="/logo.png" alt="Git Vibed" className="size-5 rounded" />
+        <img src="./logo.png" alt="Git Vibed" className="size-5 rounded" />
       </div>
 
       {tabs.map((tab, idx) => {
