@@ -1,22 +1,39 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useActive, useRepo } from "../../stores/repo";
 import { useUI, type GraphColumns } from "../../stores/ui";
 import { layoutCommits, type GraphLayout } from "../../lib/graph-layout";
 import { CommitDetail } from "./CommitDetail";
 import { CommitContextMenu } from "./CommitContextMenu";
+import { StashContextMenu } from "./StashContextMenu";
+import { BranchContextMenu } from "../branches/BranchContextMenu";
+import { MergeRebaseDialog } from "../branches/MergeRebaseDialog";
+import { Prompt } from "../ui/Prompt";
+import { PRCreateDialog } from "../github/PRCreateDialog";
 import { ChangesPanel } from "./ChangesPanel";
 import { StashDetail } from "../stashes/StashDetail";
 import { CommitFileDiff } from "./CommitFileDiff";
 import { WipFileDiff } from "./WipFileDiff";
 import { ResizeHandle } from "../ui/ResizeHandle";
 import { useSettings } from "../../stores/settings";
-import { BranchIcon, RemoteIcon, TagIcon, SettingsIcon, PlusIcon } from "../ui/Icons";
+import {
+  ComputerIcon,
+  RemoteIcon,
+  StashIcon,
+  TagIcon,
+  SettingsIcon,
+  PlusIcon,
+} from "../ui/Icons";
 import { Avatar, RemoteAvatar } from "../ui/Avatar";
+import { unwrap } from "../../lib/ipc";
+import { useConfirm } from "../ui/Confirm";
 import type { Commit } from "@shared/types";
 
 // GitKraken-style columns: refs | graph | message | author | date | sha.
 // Columns after "message" are toggleable via the gear menu in the header.
-const ROW_HEIGHT = 26;
+// 30px gives the commit subject enough vertical breathing room to stay
+// scannable even in dense histories; at 26px rows felt cramped.
+const ROW_HEIGHT = 30;
 const LANE_WIDTH = 14;
 const CIRCLE_R = 4;
 const GRAPH_INNER_PADDING = 12;
@@ -81,6 +98,11 @@ export function BranchGraph() {
           />
         ) : selectedWipFile ? (
           <WipFileDiff path={selectedWipFile.path} staged={selectedWipFile.staged} />
+        ) : selectedStash != null ? (
+          // Stashes render as full-width diff views now (like commit file
+          // diffs) instead of a right-inspector pane so the user gets the
+          // same hunk layout + actions as for other diffs.
+          <StashDetail index={selectedStash} />
         ) : (
           <>
             <ColumnHeaders graphColumnWidth={graphColumnWidth} columns={columns} />
@@ -109,27 +131,37 @@ export function BranchGraph() {
           </>
         )}
       </div>
-      <ResizeHandle
-        onResize={(dx) => setInspectorWidth(inspectorWidth - dx)}
-        side="left"
-      />
-      <div style={{ width: inspectorWidth }} className="shrink-0">
-        {selectedStash != null ? (
-          <StashDetail index={selectedStash} />
-        ) : selected ? (
-          <CommitDetail hash={selected} onClose={() => selectCommit(null)} />
-        ) : (
-          <ChangesPanel />
-        )}
-      </div>
-      {menu && (
-        <CommitContextMenu
-          x={menu.x}
-          y={menu.y}
-          commit={menu.commit}
-          onClose={() => setMenu(null)}
-        />
+      {selectedStash == null && (
+        <>
+          <ResizeHandle
+            onResize={(dx) => setInspectorWidth(inspectorWidth - dx)}
+            side="left"
+          />
+          <div style={{ width: inspectorWidth }} className="shrink-0">
+            {selected ? (
+              <CommitDetail hash={selected} onClose={() => selectCommit(null)} />
+            ) : (
+              <ChangesPanel />
+            )}
+          </div>
+        </>
       )}
+      {menu &&
+        (menu.commit.refs.some((r) => r === "stash" || r === "refs/stash") ? (
+          <StashContextMenu
+            x={menu.x}
+            y={menu.y}
+            commit={menu.commit}
+            onClose={() => setMenu(null)}
+          />
+        ) : (
+          <CommitContextMenu
+            x={menu.x}
+            y={menu.y}
+            commit={menu.commit}
+            onClose={() => setMenu(null)}
+          />
+        ))}
     </div>
   );
 }
@@ -281,6 +313,7 @@ function GraphBody({
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
+  const rafId = useRef<number | null>(null);
   const loadMoreCommits = useRepo((s) => s.loadMoreCommits);
   const commitsExhausted = useActive("commitsExhausted") ?? false;
   const loadingMore = useActive("loadingMoreCommits") ?? false;
@@ -288,8 +321,16 @@ function GraphBody({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    // rAF-throttle scroll updates: without this, each scroll event would
+    // trigger a React re-render that re-projects the visible window,
+    // and on huge repos that's enough to melt the renderer. With rAF we
+    // coalesce into one update per frame.
     const onScroll = () => {
-      setScrollTop(el.scrollTop);
+      if (rafId.current != null) return;
+      rafId.current = window.requestAnimationFrame(() => {
+        rafId.current = null;
+        setScrollTop(el.scrollTop);
+      });
       const remaining = el.scrollHeight - (el.scrollTop + el.clientHeight);
       if (remaining < ROW_HEIGHT * 20 && !commitsExhausted && !loadingMore) {
         void loadMoreCommits();
@@ -300,41 +341,66 @@ function GraphBody({
     ro.observe(el);
     setViewportHeight(el.clientHeight);
     return () => {
+      if (rafId.current != null) cancelAnimationFrame(rafId.current);
       el.removeEventListener("scroll", onScroll);
       ro.disconnect();
     };
   }, [loadMoreCommits, commitsExhausted, loadingMore]);
 
-  const firstRow = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 10);
+  const OVERSCAN = 20;
+  const firstRow = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
   const lastRow = Math.min(
     layout.nodes.length,
-    Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + 10,
+    Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + OVERSCAN,
   );
   const visibleNodes = layout.nodes.slice(firstRow, lastRow);
 
+  // Only render SVG elements that intersect the visible window. On a
+  // 10k-commit repo the previous "render every edge + circle" approach
+  // created tens of thousands of SVG nodes which tanked scroll perf and
+  // eventually crashed the renderer; keeping just the visible slice
+  // means we render ~120 elements regardless of history size.
+  const { visibleEdges, visibleCircles, svgYOffset } = useMemo(() => {
+    const from = firstRow;
+    const to = lastRow;
+    const edges = layout.edges.filter((e) => {
+      const top = Math.min(e.fromRow, e.toRow);
+      const bottom = Math.max(e.fromRow, e.toRow);
+      return bottom >= from && top <= to;
+    });
+    const circles = layout.nodes.slice(from, to);
+    return {
+      visibleEdges: edges,
+      visibleCircles: circles,
+      svgYOffset: from * ROW_HEIGHT,
+    };
+  }, [layout, firstRow, lastRow]);
+
   const totalHeight = layout.nodes.length * ROW_HEIGHT;
+  const svgHeight = (lastRow - firstRow) * ROW_HEIGHT;
 
   return (
     <div ref={containerRef} className="relative flex-1 overflow-auto">
       <div style={{ height: totalHeight + 40, position: "relative" }}>
         <svg
           width={graphColumnWidth}
-          height={totalHeight}
+          height={svgHeight}
+          viewBox={`0 ${svgYOffset} ${graphColumnWidth} ${svgHeight}`}
           style={{
             position: "absolute",
             left: REFS_COL_WIDTH,
-            top: 0,
+            top: svgYOffset,
             pointerEvents: "none",
           }}
         >
-          {layout.edges.map((e, i) => (
+          {visibleEdges.map((e, i) => (
             <Edge
               key={i}
               edge={e}
               faded={highlighted != null && !highlighted.has(edgeKey(e, layout))}
             />
           ))}
-          {layout.nodes.map((n) => (
+          {visibleCircles.map((n) => (
             <circle
               key={n.commit.hash}
               cx={GRAPH_INNER_PADDING + n.lane * LANE_WIDTH}
@@ -490,81 +556,474 @@ function CommitRow({
 
 function RefBadges({ refs, color }: { refs: string[]; color: string }) {
   const [expanded, setExpanded] = useState(false);
-  if (refs.length === 0) return null;
-  const MAX_VISIBLE = 1;
-  const visible = refs.slice(0, MAX_VISIBLE);
-  const extra = refs.length - MAX_VISIBLE;
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  // Delayed close lets the user travel from the refs cell into the popover
+  // that sits a few pixels below it without the hover state collapsing
+  // mid-movement. Re-entering (cell or popover) cancels the pending close.
+  const closeTimer = useRef<number | null>(null);
+  const remotes = useActive("remotes") ?? [];
 
-  // Hovering the row (anywhere in the refs cell) pops a floating list of all
-  // attached refs. Absolute positioning lets the popover escape the 220px
-  // refs column so long branch names stay readable.
+  // "HEAD" is redundant with the accompanying branch name on the same
+  // commit and only clutters the list. Sort so branches (local first,
+  // remote second) come before tags — they're the interactive items
+  // users care about checking out.
+  const ordered = useMemo(() => {
+    const score = (r: string): number => {
+      if (r.startsWith("tag:")) return 3;
+      const slash = r.indexOf("/");
+      if (slash > 0) {
+        const maybeRemote = r.slice(0, slash);
+        if (remotes.some((rem) => rem.name === maybeRemote)) return 2;
+      }
+      return 1; // local branch
+    };
+    return refs
+      .filter((r) => r !== "HEAD")
+      .slice()
+      .sort((a, b) => score(a) - score(b));
+  }, [refs, remotes]);
+
+  // Portal the popover out of the commit row — the refs column has
+  // `overflow-hidden` to trim long ref lists, which would otherwise clip
+  // an absolutely-positioned popover. Rendering into document.body with
+  // measured fixed coords sidesteps every ancestor's overflow rules.
+  useLayoutEffect(() => {
+    if (!expanded || !anchorRef.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, left: rect.left });
+  }, [expanded]);
+
+  if (ordered.length === 0) return null;
+  const MAX_VISIBLE = 1;
+  const visible = ordered.slice(0, MAX_VISIBLE);
+  const extra = ordered.length - MAX_VISIBLE;
+
+  const openNow = () => {
+    if (closeTimer.current != null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    if (extra > 0) setExpanded(true);
+  };
+  const closeSoon = () => {
+    if (closeTimer.current != null) clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => {
+      setExpanded(false);
+      closeTimer.current = null;
+    }, 150);
+  };
+
   return (
     <div
-      className="relative flex min-w-0 items-center gap-1"
-      onMouseEnter={() => extra > 0 && setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
+      ref={anchorRef}
+      className="flex min-w-0 items-center gap-1"
+      onMouseEnter={openNow}
+      onMouseLeave={closeSoon}
     >
       {visible.map((r) => (
-        <RefBadge key={r} ref_={r} color={color} />
+        <RefBadge
+          key={r}
+          ref_={r}
+          color={color}
+          // While the popover is open we already show this ref in the
+          // list below — stop truncating the inline badge so it no
+          // longer looks different from the popover entry.
+          truncate={!expanded}
+        />
       ))}
       {extra > 0 && (
         <span
           className="shrink-0 cursor-pointer rounded bg-neutral-800 px-1 py-0.5 text-[10px] text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200"
-          title={refs.join(", ")}
+          title={ordered.join(", ")}
         >
           +{extra}
         </span>
       )}
-      {expanded && (
-        <div className="absolute left-0 top-full z-30 mt-1 flex max-w-[420px] flex-wrap gap-1 rounded-md border border-neutral-800 bg-neutral-900 p-1.5 shadow-lg">
-          {refs.map((r) => (
-            <RefBadge key={r} ref_={r} color={color} />
-          ))}
-        </div>
-      )}
+      {expanded &&
+        pos &&
+        createPortal(
+          <div
+            onMouseEnter={openNow}
+            onMouseLeave={closeSoon}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.stopPropagation()}
+            // No wrapper background — each ref badge keeps its own pill
+            // so the list reads as a set of floating, clickable chips
+            // over the graph rather than a boxed menu.
+            className="gui-menu-in fixed z-50 flex max-w-[420px] flex-col items-start gap-1"
+            style={{ top: pos.top, left: pos.left }}
+          >
+            {ordered.slice(MAX_VISIBLE).map((r) => (
+              <RefBadge
+                key={r}
+                ref_={r}
+                color={color}
+                truncate={false}
+                inPopover
+              />
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
 
-function RefBadge({ ref_, color }: { ref_: string; color: string }) {
+function RefBadge({
+  ref_,
+  color,
+  truncate = true,
+  inPopover,
+}: {
+  ref_: string;
+  color: string;
+  // When false, the ref label is never truncated. Used by the inline
+  // badge while the popover is open so the text doesn't visually change
+  // mid-interaction.
+  truncate?: boolean;
+  // Rendered inside the floating ref popover — enables the right-click
+  // context menu and slightly bumps the hit-area so the badge is easy
+  // to double-click.
+  inPopover?: boolean;
+}) {
   const setHovered = useUI((s) => s.setHoveredBranch);
+  const toast = useUI((s) => s.toast);
+  const refreshAll = useRepo((s) => s.refreshAll);
+  const confirmDialog = useConfirm();
+  const branches = useActive("branches") ?? [];
   const remotes = useActive("remotes") ?? [];
-  const isTag = ref_.startsWith("tag:");
-  const isRemote = ref_.includes("/") && !isTag && !ref_.startsWith("HEAD");
 
-  // For "origin/main" style refs we strip the remote prefix and render a
-  // remote avatar badge in its place. Cleaner than long "origin/foo/bar"
-  // labels and matches GitKraken's compact ref display.
+  // After parser normalization, refs come in short form:
+  //   tag:<name>          — tag
+  //   <remote>/<branch>   — remote branch (first segment matches a configured remote)
+  //   <name>              — local branch
+  //   stash / refs/stash  — a stash ref (rarely appears via --all but can)
+  // Matching against the actual remote list (rather than guessing off "/")
+  // correctly classifies a local branch whose name happens to contain a
+  // slash (e.g. `feature/login`) as local.
+  const isTag = ref_.startsWith("tag:");
+  const isStash = ref_ === "stash" || ref_ === "refs/stash";
   let label = ref_;
   let remoteName: string | null = null;
+  let kind: "tag" | "remote" | "local" | "stash" = "local";
   if (isTag) {
+    kind = "tag";
     label = ref_.slice(4);
-  } else if (isRemote) {
+  } else if (isStash) {
+    kind = "stash";
+    label = "stash";
+  } else {
     const slash = ref_.indexOf("/");
-    remoteName = ref_.slice(0, slash);
-    label = ref_.slice(slash + 1);
+    if (slash > 0) {
+      const maybeRemote = ref_.slice(0, slash);
+      if (remotes.some((r) => r.name === maybeRemote)) {
+        kind = "remote";
+        remoteName = maybeRemote;
+        label = ref_.slice(slash + 1);
+      }
+    }
   }
   const remote = remoteName ? remotes.find((r) => r.name === remoteName) : null;
+  const branchName = kind === "stash" ? null : kind === "tag" ? label : ref_;
+  // Only offer checkout for refs that actually exist in the current
+  // branch list (tags always accept `git checkout <tag>` which lands in
+  // detached HEAD — the user opts into that from the menu). Guards
+  // against stale decorations pointing at refs the user has since
+  // deleted.
+  const canCheckout =
+    !!branchName &&
+    (kind === "tag" || branches.some((b) => b.name === branchName));
+
+  async function checkout(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!branchName) return;
+
+    // Tag — checkout lands in a detached HEAD. Warn once so the user
+    // knows what they're opting into.
+    if (kind === "tag") {
+      const ok = await confirmDialog({
+        title: `Checkout ${branchName}`,
+        message: `Checking out a tag puts the repo in detached HEAD.\nCommits you make after this won't belong to any branch.`,
+        confirmLabel: "Checkout",
+      });
+      if (!ok) return;
+      try {
+        await unwrap(window.gitApi.checkout(branchName));
+        toast("info", `Detached HEAD at ${branchName}`);
+        await refreshAll();
+      } catch (err) {
+        toast("error", err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
+
+    // Local branch — straight checkout.
+    if (kind === "local") {
+      try {
+        await unwrap(window.gitApi.checkout(branchName));
+        toast("success", `Switched to ${branchName}`);
+        await refreshAll();
+      } catch (err) {
+        toast("error", err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
+
+    // Remote branch — avoid landing in detached HEAD. Prefer the matching
+    // local branch if one exists, creating it with the remote as upstream
+    // when it doesn't. If the local copy diverges we offer to reset it to
+    // the remote's tip.
+    const localName = label;
+    const localBranch = branches.find((b) => b.name === localName && b.isLocal);
+    const remoteBranch = branches.find((b) => b.name === branchName && b.isRemote);
+
+    try {
+      if (!localBranch) {
+        await unwrap(window.gitApi.checkoutCreate(localName, branchName));
+        toast("success", `Created local branch ${localName}`);
+      } else {
+        const sameHead =
+          localBranch.lastCommit &&
+          remoteBranch?.lastCommit &&
+          localBranch.lastCommit === remoteBranch.lastCommit;
+        if (!sameHead) {
+          const doReset = await confirmDialog({
+            title: `Switch to ${localName}`,
+            message: `Local branch "${localName}" is at a different commit than ${branchName}.\n\nReset local to the remote's HEAD?`,
+            confirmLabel: "Reset and switch",
+            cancelLabel: "Switch without reset",
+            danger: true,
+          });
+          await unwrap(window.gitApi.checkout(localName));
+          if (doReset) {
+            await unwrap(window.gitApi.reset(branchName, "hard"));
+            toast("success", `Switched to ${localName} (reset to ${branchName})`);
+          } else {
+            toast("success", `Switched to ${localName}`);
+          }
+        } else {
+          await unwrap(window.gitApi.checkout(localName));
+          toast("success", `Switched to ${localName}`);
+        }
+      }
+      await refreshAll();
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const onDoubleClick = (e: React.MouseEvent) => {
+    if (!branchName || !canCheckout) return;
+    e.stopPropagation();
+    void checkout(e);
+  };
+
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const onContextMenu = (e: React.MouseEvent) => {
+    if (!canCheckout) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  // Branch entry used by the full BranchContextMenu. Tags and stashes
+  // don't map onto a `Branch` record so the menu falls back to a
+  // lightweight per-kind menu for them.
+  const branchEntry =
+    kind === "local" || kind === "remote"
+      ? branches.find((b) => b.name === branchName)
+      : null;
 
   return (
-    <span
-      onMouseEnter={() => !isTag && setHovered(ref_)}
-      onMouseLeave={() => setHovered(null)}
-      className="inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px]"
-      style={{ backgroundColor: `${color}33`, color: "#e5e5e5" }}
-      title={ref_}
-    >
-      {isTag ? (
-        <TagIcon className="size-2.5 shrink-0" />
-      ) : remote ? (
-        <RemoteAvatar url={remote.fetchUrl} size={10} />
-      ) : isRemote ? (
-        <RemoteIcon className="size-2.5 shrink-0" />
-      ) : (
-        <BranchIcon className="size-2.5 shrink-0" />
+    <>
+      <span
+        onMouseEnter={() => kind !== "tag" && setHovered(ref_)}
+        onMouseLeave={() => setHovered(null)}
+        onDoubleClick={onDoubleClick}
+        onContextMenu={onContextMenu}
+        className={`inline-flex min-w-0 items-center gap-1 rounded px-2 py-0.5 text-[11px] ${
+          canCheckout ? "cursor-pointer hover:brightness-110" : ""
+        } ${inPopover ? "shadow-sm" : ""}`}
+        // Full-opacity pills — the graph palette uses Tailwind 400-level
+        // hues that are saturated enough for near-black text to stay
+        // readable. Losing the 20% wash makes the badges pop against
+        // the neutral graph background and matches the mock.
+        style={{ backgroundColor: color, color: "#0b0b0b" }}
+        title={canCheckout ? `Double-click to checkout ${branchName}` : ref_}
+      >
+        {kind === "tag" ? (
+          <TagIcon className="size-3.5 shrink-0" />
+        ) : kind === "stash" ? (
+          <StashIcon className="size-4 shrink-0" />
+        ) : kind === "remote" && remote ? (
+          <RemoteAvatar url={remote.fetchUrl} size={16} />
+        ) : kind === "remote" ? (
+          <RemoteIcon className="size-4 shrink-0" />
+        ) : (
+          <ComputerIcon className="size-4 shrink-0" />
+        )}
+        <span className={truncate ? "truncate" : "whitespace-nowrap"}>{label}</span>
+      </span>
+      {menu && branchEntry && (
+        <RefBranchMenuHost
+          x={menu.x}
+          y={menu.y}
+          branch={branchEntry}
+          onClose={() => setMenu(null)}
+        />
       )}
-      <span className="truncate">{label}</span>
-    </span>
+      {menu && !branchEntry && branchName && (
+        <TagOrStashMenu
+          x={menu.x}
+          y={menu.y}
+          refName={branchName}
+          kind={kind}
+          onClose={() => setMenu(null)}
+          onCheckout={async () => {
+            setMenu(null);
+            await checkout(new MouseEvent("click") as unknown as React.MouseEvent);
+          }}
+          onCopy={() => {
+            void navigator.clipboard.writeText(branchName);
+            setMenu(null);
+            toast("success", "Copied ref name");
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// Hosts BranchContextMenu so we can drive its merge/rebase/rename/PR
+// dialogs locally without lifting them up to BranchGraph — each ref
+// badge owns its own menu lifecycle. Portals sidestep the commit row's
+// overflow-hidden refs column.
+function RefBranchMenuHost({
+  x,
+  y,
+  branch,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  branch: import("@shared/types").Branch;
+  onClose: () => void;
+}) {
+  const [mergeDialog, setMergeDialog] = useState<
+    { kind: "merge" | "rebase"; source: string } | null
+  >(null);
+  const [renaming, setRenaming] = useState<import("@shared/types").Branch | null>(null);
+  const [prHead, setPrHead] = useState<string | null>(null);
+  const refreshAll = useRepo((s) => s.refreshAll);
+  const toast = useUI((s) => s.toast);
+
+  async function handleRename(newName: string) {
+    const target = renaming;
+    setRenaming(null);
+    if (!target || newName === target.name) return;
+    try {
+      await unwrap(window.gitApi.branchRename(target.name, newName));
+      toast("success", `Renamed to ${newName}`);
+      await refreshAll();
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  return createPortal(
+    <>
+      <BranchContextMenu
+        x={x}
+        y={y}
+        branch={branch}
+        onClose={onClose}
+        onMerge={(src) => setMergeDialog({ kind: "merge", source: src })}
+        onRebase={(src) => setMergeDialog({ kind: "rebase", source: src })}
+        onRename={(b) => setRenaming(b)}
+        onOpenPR={(b) => setPrHead(b.name)}
+      />
+      {mergeDialog && (
+        <MergeRebaseDialog
+          kind={mergeDialog.kind}
+          source={mergeDialog.source}
+          onClose={() => setMergeDialog(null)}
+        />
+      )}
+      {renaming && (
+        <Prompt
+          title="Rename Branch"
+          label="New name"
+          defaultValue={renaming.name}
+          submitLabel="Rename"
+          onSubmit={handleRename}
+          onCancel={() => setRenaming(null)}
+        />
+      )}
+      {prHead && <PRCreateDialog headBranch={prHead} onClose={() => setPrHead(null)} />}
+    </>,
+    document.body,
+  );
+}
+
+function TagOrStashMenu({
+  x,
+  y,
+  refName,
+  kind,
+  onClose,
+  onCheckout,
+  onCopy,
+}: {
+  x: number;
+  y: number;
+  refName: string;
+  kind: "tag" | "stash" | "remote" | "local";
+  onClose: () => void;
+  onCheckout: () => void;
+  onCopy: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [onClose]);
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-50" onClick={onClose} />
+      <div
+        ref={ref}
+        className="gui-menu-in fixed z-50 min-w-[180px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-sm shadow-xl"
+        style={{ left: x, top: y }}
+      >
+        <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
+          {refName}
+        </div>
+        {kind !== "stash" && (
+          <button
+            onClick={onCheckout}
+            className="block w-full px-3 py-1.5 text-left text-neutral-200 hover:bg-neutral-800"
+          >
+            Checkout
+          </button>
+        )}
+        <button
+          onClick={onCopy}
+          className="block w-full px-3 py-1.5 text-left text-neutral-200 hover:bg-neutral-800"
+        >
+          Copy name
+        </button>
+      </div>
+    </>,
+    document.body,
   );
 }
 
