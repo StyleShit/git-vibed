@@ -36,10 +36,18 @@ export class GitExecutor {
     // repos don't blow past simple-git's default 10MB and reject. 128MB
     // is generous but still capped — a repo with enough output to
     // exceed this should be paginated, not buffered.
-    this.git = simpleGit({ baseDir: repoPath, maxConcurrentProcesses: 3 }).env(
-      "GIT_OPTIONAL_LOCKS",
-      "0",
-    );
+    //
+    // Pass the full process.env — simple-git's `.env(k, v)` seeds an empty
+    // object, so the spawned git (and the hooks it invokes, e.g. husky →
+    // pnpm) would otherwise start with no PATH/HOME/etc. See fix-path.ts
+    // for how PATH itself is populated at startup. We strip the env vars
+    // that simple-git's argv-parser guards against (editor/pager/ssh
+    // hijacking) so callers like Claude Code that pre-set GIT_EDITOR don't
+    // trip the check.
+    this.git = simpleGit({ baseDir: repoPath, maxConcurrentProcesses: 3 }).env({
+      ...sanitizedEnv(),
+      GIT_OPTIONAL_LOCKS: "0",
+    });
   }
 
   // ---- Repo / status -----------------------------------------------------
@@ -103,6 +111,7 @@ export class GitExecutor {
       conflicted,
       mergeInProgress,
       rebaseInProgress,
+      incomingBranch: readIncomingBranch(gitDir, mergeInProgress, rebaseInProgress),
     };
   }
 
@@ -770,6 +779,18 @@ export class GitExecutor {
     }
   }
 
+  // Write a repo-relative file. Used by the merge editor to persist the
+  // resolved result before calling markResolved.
+  async writeFile(filePath: string, content: string): Promise<void> {
+    const abs = path.join(this.repoPath, filePath);
+    const rel = path.relative(this.repoPath, abs);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      throw new Error("refusing to write outside the repo");
+    }
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, content, "utf8");
+  }
+
   // ---- Remotes -----------------------------------------------------------
 
   async remotes(): Promise<Remote[]> {
@@ -869,6 +890,48 @@ export class GitExecutor {
   }
 }
 
+// Figure out the "other side" branch name for merge/rebase banners and
+// pane labels. Uses the same files git itself reads when resuming the
+// operation. Returns undefined when we can't confidently extract a name.
+function readIncomingBranch(
+  gitDir: string,
+  mergeInProgress: boolean,
+  rebaseInProgress: boolean,
+): string | undefined {
+  try {
+    if (mergeInProgress) {
+      // MERGE_MSG typically starts with `Merge branch 'foo'` or
+      // `Merge remote-tracking branch 'origin/foo'`.
+      const msgPath = path.join(gitDir, "MERGE_MSG");
+      if (fs.existsSync(msgPath)) {
+        const msg = fs.readFileSync(msgPath, "utf8");
+        const m =
+          msg.match(/^Merge branch '([^']+)'/m) ||
+          msg.match(/^Merge branches ('[^']+'(?:, '[^']+')*)/m) ||
+          msg.match(/^Merge remote-tracking branch '([^']+)'/m) ||
+          msg.match(/^Merge tag '([^']+)'/m) ||
+          msg.match(/^Merge commit '([^']+)'/m);
+        if (m && m[1]) return m[1].replace(/^'(.+)'$/, "$1");
+      }
+      return undefined;
+    }
+    if (rebaseInProgress) {
+      // rebase-merge/head-name or rebase-apply/head-name contains a full
+      // ref like `refs/heads/feature`.
+      for (const sub of ["rebase-merge", "rebase-apply"]) {
+        const p = path.join(gitDir, sub, "head-name");
+        if (fs.existsSync(p)) {
+          const raw = fs.readFileSync(p, "utf8").trim();
+          return raw.replace(/^refs\/heads\//, "");
+        }
+      }
+    }
+  } catch {
+    // Swallow — status is best-effort; missing branch name is fine.
+  }
+  return undefined;
+}
+
 function mapIndexStatus(code?: string): FileStatus {
   switch (code) {
     case "A":
@@ -930,4 +993,39 @@ function originToScope(origin: string): "local" | "global" | "system" {
   if (/\.git\/config$/.test(origin)) return "local";
   if (/\/\.gitconfig$/.test(origin) || /\.config\/git\/config$/.test(origin)) return "global";
   return "system";
+}
+
+// simple-git's argv-parser rejects a fixed set of env vars that can be used
+// to hijack the editor/pager/ssh/askpass git invokes. Claude Code (and some
+// CI runners) pre-set GIT_EDITOR=true to suppress interactive editors, which
+// is harmless in practice but trips the guard. Strip the full guarded list
+// rather than picking at GIT_EDITOR alone.
+const UNSAFE_ENV_KEYS = new Set([
+  "EDITOR",
+  "GIT_ASKPASS",
+  "GIT_CONFIG",
+  "GIT_CONFIG_COUNT",
+  "GIT_CONFIG_GLOBAL",
+  "GIT_CONFIG_SYSTEM",
+  "GIT_EDITOR",
+  "GIT_EXEC_PATH",
+  "GIT_EXTERNAL_DIFF",
+  "GIT_PAGER",
+  "GIT_PROXY_COMMAND",
+  "GIT_SEQUENCE_EDITOR",
+  "GIT_SSH",
+  "GIT_SSH_COMMAND",
+  "GIT_TEMPLATE_DIR",
+  "PAGER",
+  "PREFIX",
+  "SSH_ASKPASS",
+]);
+
+function sanitizedEnv(): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (UNSAFE_ENV_KEYS.has(k.toUpperCase())) continue;
+    out[k] = v;
+  }
+  return out;
 }

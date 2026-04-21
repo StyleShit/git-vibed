@@ -170,6 +170,11 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   ipc.handle(GIT.FILE_AT_REF, (_e, { ref, path: p }: { ref: string; path: string }) =>
     wrap(() => exec(repo).fileAtRef(ref, p)),
   );
+  ipc.handle(
+    GIT.WRITE_FILE,
+    (_e, { path: p, content }: { path: string; content: string }) =>
+      wrap(() => exec(repo).writeFile(p, content)),
+  );
 
   ipc.handle(GIT.STASH_LIST, () => wrap(() => exec(repo).stashList()));
   ipc.handle(GIT.STASH_APPLY, (_e, index: number) => wrap(() => exec(repo).stashApply(index)));

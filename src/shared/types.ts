@@ -34,6 +34,10 @@ export interface RepoStatus {
   conflicted: FileChange[];
   mergeInProgress: boolean;
   rebaseInProgress: boolean;
+  // Name of the branch being merged/rebased in, when resolvable. Read from
+  // .git/MERGE_MSG / rebase-merge/head-name; may be undefined if git only
+  // left a SHA or the file format is unusual.
+  incomingBranch?: string;
 }
 
 export interface Commit {
@@ -123,12 +127,34 @@ export interface FileDiff {
   raw: string;
 }
 
+// Per-line inclusion decision inside a conflict chunk.
+//   null  — user hasn't decided yet (pending)
+//   true  — include this line in the merged result
+//   false — drop this line from the merged result
+export type LineDecision = boolean | null;
+
 export interface ConflictRegion {
   kind: "ok" | "conflict";
   ours?: string[];
   base?: string[];
   theirs?: string[];
   resolved?: string[];
+  // Parallel arrays to ours / theirs. Conflict regions start with all
+  // decisions null; the chunk is considered resolved once every line on
+  // both sides has been decided. Resolved content = accepted ours lines
+  // followed by accepted theirs lines.
+  oursDecisions?: LineDecision[];
+  theirsDecisions?: LineDecision[];
+  // How many lines this region occupies in each side's own file. For
+  // conflict regions these match ours.length and theirs.length. For ok
+  // regions they can differ (e.g. a stable chunk that came from ours
+  // adding content that theirs didn't have will have theirsSpan = 0).
+  oursSpan: number;
+  theirsSpan: number;
+  // Where the ok region's content came from, used to color lines added
+  // by one side relative to base. "both" = content present in all three;
+  // "ours"/"theirs" = purely additive from that side.
+  source?: "both" | "ours" | "theirs";
   startLine?: number;
   endLine?: number;
 }
