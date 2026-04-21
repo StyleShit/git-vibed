@@ -24,13 +24,15 @@ export function useKeyboardShortcuts() {
           ui.selectedCommit != null ||
           ui.selectedStash != null ||
           ui.selectedCommitFile != null ||
-          ui.selectedWipFile != null;
+          ui.selectedWipFile != null ||
+          ui.selectedStashFile != null;
         if (hadSelection) {
           e.preventDefault();
           ui.selectCommit(null);
           ui.selectStash(null);
           ui.selectCommitFile(null);
           ui.selectWipFile(null);
+          ui.selectStashFile(null);
         } else if (ui.view === "settings") {
           e.preventDefault();
           ui.setView("graph");
@@ -110,7 +112,7 @@ export function useKeyboardShortcuts() {
       // Cmd/Ctrl + Enter — commit (only if a message box has text). Delegated
       // to the commit panel which owns the input state.
       if (e.key === "Enter") {
-        const evt = new CustomEvent("gitgui:commit");
+        const evt = new CustomEvent("gitvibed:commit");
         window.dispatchEvent(evt);
         e.preventDefault();
         return;

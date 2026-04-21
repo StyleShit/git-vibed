@@ -14,6 +14,7 @@ import { ChangesPanel } from "./ChangesPanel";
 import { StashDetail } from "../stashes/StashDetail";
 import { CommitFileDiff } from "./CommitFileDiff";
 import { WipFileDiff } from "./WipFileDiff";
+import { StashFileDiff } from "./StashFileDiff";
 import { ResizeHandle } from "../ui/ResizeHandle";
 import { useSettings } from "../../stores/settings";
 import {
@@ -29,7 +30,7 @@ import { unwrap } from "../../lib/ipc";
 import { useConfirm } from "../ui/Confirm";
 import type { Commit } from "@shared/types";
 
-// GitKraken-style columns: refs | graph | message | author | date | sha.
+// Graph columns: refs | graph | message | author | date | sha.
 // Columns after "message" are toggleable via the gear menu in the header.
 // 30px gives the commit subject enough vertical breathing room to stay
 // scannable even in dense histories; at 26px rows felt cramped.
@@ -50,6 +51,7 @@ export function BranchGraph() {
   const selectCommit = useUI((s) => s.selectCommit);
   const selectedCommitFile = useUI((s) => s.selectedCommitFile);
   const selectedWipFile = useUI((s) => s.selectedWipFile);
+  const selectedStashFile = useUI((s) => s.selectedStashFile);
   const [menu, setMenu] = useState<{ x: number; y: number; commit: Commit } | null>(null);
   const setView = useUI((s) => s.setView);
   const columns = useUI((s) => s.graphColumns);
@@ -64,7 +66,7 @@ export function BranchGraph() {
   );
 
   // Precompute which commits are on the hovered branch lineage so we can
-  // fade unrelated commits. GitKraken calls this "Commit Highlighting".
+  // fade unrelated commits — helps trace a branch's lineage at a glance.
   const highlighted = useMemo(() => {
     if (!hoveredBranch) return null;
     const tipNode = layout.nodes.find((n) => n.commit.refs.includes(hoveredBranch));
@@ -98,11 +100,11 @@ export function BranchGraph() {
           />
         ) : selectedWipFile ? (
           <WipFileDiff path={selectedWipFile.path} staged={selectedWipFile.staged} />
-        ) : selectedStash != null ? (
-          // Stashes render as full-width diff views now (like commit file
-          // diffs) instead of a right-inspector pane so the user gets the
-          // same hunk layout + actions as for other diffs.
-          <StashDetail index={selectedStash} />
+        ) : selectedStashFile ? (
+          <StashFileDiff
+            index={selectedStashFile.index}
+            path={selectedStashFile.path}
+          />
         ) : (
           <>
             <ColumnHeaders graphColumnWidth={graphColumnWidth} columns={columns} />
@@ -131,21 +133,19 @@ export function BranchGraph() {
           </>
         )}
       </div>
-      {selectedStash == null && (
-        <>
-          <ResizeHandle
-            onResize={(dx) => setInspectorWidth(inspectorWidth - dx)}
-            side="left"
-          />
-          <div style={{ width: inspectorWidth }} className="shrink-0">
-            {selected ? (
-              <CommitDetail hash={selected} onClose={() => selectCommit(null)} />
-            ) : (
-              <ChangesPanel />
-            )}
-          </div>
-        </>
-      )}
+      <ResizeHandle
+        onResize={(dx) => setInspectorWidth(inspectorWidth - dx)}
+        side="left"
+      />
+      <div style={{ width: inspectorWidth }} className="shrink-0">
+        {selectedStash != null ? (
+          <StashDetail index={selectedStash} />
+        ) : selected ? (
+          <CommitDetail hash={selected} onClose={() => selectCommit(null)} />
+        ) : (
+          <ChangesPanel />
+        )}
+      </div>
       {menu &&
         (menu.commit.refs.some((r) => r === "stash" || r === "refs/stash") ? (
           <StashContextMenu
@@ -820,6 +820,7 @@ function RefBadge({
   };
 
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [hovered, setHoveredLocal] = useState(false);
   const onContextMenu = (e: React.MouseEvent) => {
     if (!canCheckout) return;
     e.preventDefault();
@@ -838,30 +839,38 @@ function RefBadge({
   return (
     <>
       <span
-        onMouseEnter={() => kind !== "tag" && setHovered(ref_)}
-        onMouseLeave={() => setHovered(null)}
+        onMouseEnter={() => {
+          setHoveredLocal(true);
+          if (kind !== "tag") setHovered(ref_);
+        }}
+        onMouseLeave={() => {
+          setHoveredLocal(false);
+          setHovered(null);
+        }}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
         className={`inline-flex min-w-0 items-center gap-1 rounded px-2 py-0.5 text-[11px] ${
-          canCheckout ? "cursor-pointer hover:brightness-110" : ""
+          canCheckout ? "cursor-pointer" : ""
         } ${inPopover ? "shadow-sm" : ""}`}
-        // Full-opacity pills — the graph palette uses Tailwind 400-level
-        // hues that are saturated enough for near-black text to stay
-        // readable. Losing the 20% wash makes the badges pop against
-        // the neutral graph background and matches the mock.
-        style={{ backgroundColor: color, color: "#0b0b0b" }}
+        // Translucent pills tinted by the branch color, bumped from
+        // ~20% to ~33% alpha on hover so the badge lights up without
+        // flipping to a fully opaque block.
+        style={{
+          backgroundColor: `${color}${hovered ? "55" : "33"}`,
+          color: "#e5e5e5",
+        }}
         title={canCheckout ? `Double-click to checkout ${branchName}` : ref_}
       >
         {kind === "tag" ? (
           <TagIcon className="size-3.5 shrink-0" />
         ) : kind === "stash" ? (
-          <StashIcon className="size-4 shrink-0" />
+          <StashIcon className="size-4 shrink-0 text-neutral-300" />
         ) : kind === "remote" && remote ? (
           <RemoteAvatar url={remote.fetchUrl} size={16} />
         ) : kind === "remote" ? (
           <RemoteIcon className="size-4 shrink-0" />
         ) : (
-          <ComputerIcon className="size-4 shrink-0" />
+          <ComputerIcon className="size-4 shrink-0 text-neutral-300" />
         )}
         <span className={truncate ? "truncate" : "whitespace-nowrap"}>{label}</span>
       </span>
@@ -1028,7 +1037,7 @@ function TagOrStashMenu({
 }
 
 
-// "5m", "3h", "2d", "1w", "6mo", "1y" — compact like GitKraken's date column.
+// "5m", "3h", "2d", "1w", "6mo", "1y" — compact relative time for the date column.
 function formatRelative(d: Date): string {
   const delta = (Date.now() - d.getTime()) / 1000;
   if (delta < 60) return "just now";

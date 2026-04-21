@@ -31,6 +31,14 @@ export interface WipFileSelection {
   staged: boolean;
 }
 
+// Stash file selection mirrors CommitFileSelection — index pins the stash
+// entry, path pins the file within it. Rendering this pair swaps the main
+// view into a dedicated diff component.
+export interface StashFileSelection {
+  index: number;
+  path: string;
+}
+
 interface UIState {
   view: MainView;
   selectedCommit: string | null;
@@ -39,6 +47,7 @@ interface UIState {
   selectedStash: number | null;
   selectedCommitFile: CommitFileSelection | null;
   selectedWipFile: WipFileSelection | null;
+  selectedStashFile: StashFileSelection | null;
   selectedConflictFile: string | null;
   prStateFilter: "open" | "closed" | "all";
   commandPaletteOpen: boolean;
@@ -53,6 +62,7 @@ interface UIState {
   selectStash: (index: number | null) => void;
   selectCommitFile: (f: CommitFileSelection | null) => void;
   selectWipFile: (f: WipFileSelection | null) => void;
+  selectStashFile: (f: StashFileSelection | null) => void;
   selectConflictFile: (p: string | null) => void;
   setPrStateFilter: (s: UIState["prStateFilter"]) => void;
   setCommandPalette: (open: boolean) => void;
@@ -79,6 +89,7 @@ export const useUI = create<UIState>((set, get) => ({
   selectedStash: null,
   selectedCommitFile: null,
   selectedWipFile: null,
+  selectedStashFile: null,
   selectedConflictFile: null,
   prStateFilter: "open",
   commandPaletteOpen: false,
@@ -95,6 +106,7 @@ export const useUI = create<UIState>((set, get) => ({
       selectedStash: null,
       selectedCommitFile: null,
       selectedWipFile: null,
+      selectedStashFile: null,
     }),
   selectFile: (selectedFile) => set({ selectedFile }),
   selectPR: (selectedPR) =>
@@ -110,16 +122,20 @@ export const useUI = create<UIState>((set, get) => ({
       selectedCommit: null,
       selectedCommitFile: null,
       selectedWipFile: null,
+      selectedStashFile: null,
     }),
   selectCommitFile: (selectedCommitFile) =>
-    set({ selectedCommitFile, selectedWipFile: null }),
+    set({ selectedCommitFile, selectedWipFile: null, selectedStashFile: null }),
   selectWipFile: (selectedWipFile) =>
     set({
       selectedWipFile,
       selectedCommit: null,
       selectedStash: null,
       selectedCommitFile: null,
+      selectedStashFile: null,
     }),
+  selectStashFile: (selectedStashFile) =>
+    set({ selectedStashFile, selectedCommitFile: null, selectedWipFile: null }),
   selectConflictFile: (selectedConflictFile) => set({ selectedConflictFile }),
   setPrStateFilter: (prStateFilter) => set({ prStateFilter }),
   setCommandPalette: (commandPaletteOpen) => set({ commandPaletteOpen }),

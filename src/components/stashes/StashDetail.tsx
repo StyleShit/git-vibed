@@ -2,57 +2,63 @@ import { useEffect, useMemo, useState } from "react";
 import { useActive, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { maybe, unwrap } from "../../lib/ipc";
-import { useSettings } from "../../stores/settings";
-import { detectLanguage } from "../../lib/highlight";
-import { SplitView, UnifiedView } from "../graph/DiffView";
-import { CloseIcon, StashIcon, ChevronRightIcon } from "../ui/Icons";
+import {
+  CloseIcon,
+  CommitIcon,
+  FolderIcon,
+  PathIcon,
+  StashIcon,
+  TreeIcon,
+} from "../ui/Icons";
 import { useConfirm } from "../ui/Confirm";
-import type { FileDiff } from "@shared/types";
+import type { FileDiff, FileStatus } from "@shared/types";
 
-// Stash detail rendered as a full-width main-view diff. Reuses the same
-// UnifiedView / SplitView components that commit + WIP diffs use, so
-// stashes inherit syntax highlighting and the hunk/split toggle for
-// free. A left-side file list lets the user hop between the files
-// covered by the stash, matching the commit-file browser.
+// Right-inspector view for a selected stash — mirrors the CommitDetail
+// layout so stashes feel identical to commits: header, subject line,
+// apply/pop/drop actions, and a file list the user clicks to open a
+// diff in the main view. The per-file diff itself is rendered by
+// StashFileDiff using the shared DiffView components.
 export function StashDetail({ index }: { index: number }) {
   const stashes = useActive("stashes") ?? [];
   const stash = stashes.find((s) => s.index === index);
   const selectStash = useUI((s) => s.selectStash);
+  const selectStashFile = useUI((s) => s.selectStashFile);
+  const selectedStashFile = useUI((s) => s.selectedStashFile);
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
-  const viewMode = useSettings((s) => s.diffViewMode);
-  const setViewMode = useSettings((s) => s.setDiffViewMode);
   const [files, setFiles] = useState<FileDiff[] | null>(null);
-  const [activePath, setActivePath] = useState<string | null>(null);
+  const [view, setView] = useState<"path" | "tree">("path");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setFiles(null);
-    setActivePath(null);
     if (!stash) return;
     void (async () => {
-      const parsed = await maybe(window.gitApi.stashShowFiles(index));
-      const list = parsed ?? [];
-      setFiles(list);
-      setActivePath(list[0]?.path ?? null);
+      const res = await maybe(window.gitApi.stashShowFiles(index));
+      setFiles(res ?? []);
     })();
   }, [index, stash]);
 
-  const activeFile = useMemo(
-    () => files?.find((f) => f.path === activePath) ?? null,
-    [files, activePath],
-  );
-  const lang = useMemo(
-    () => (activeFile ? detectLanguage(activeFile.path) : null),
-    [activeFile],
-  );
+  const stats = useMemo(() => {
+    if (!files) return { modified: 0, added: 0, deleted: 0 };
+    let modified = 0;
+    let added = 0;
+    let deleted = 0;
+    for (const f of files) {
+      const status = guessStatus(f);
+      if (status === "added") added += 1;
+      else if (status === "deleted") deleted += 1;
+      else modified += 1;
+    }
+    return { modified, added, deleted };
+  }, [files]);
 
   if (!stash) {
     return (
-      <div className="flex h-full w-full flex-col bg-neutral-950 p-3 text-sm text-neutral-500">
+      <aside className="flex h-full w-full flex-col border-l border-neutral-800 bg-neutral-925 p-3 text-sm text-neutral-500">
         Stash no longer exists.
-      </div>
+      </aside>
     );
   }
 
@@ -77,29 +83,38 @@ export function StashDetail({ index }: { index: number }) {
   );
 
   return (
-    <div className="flex h-full w-full flex-col bg-neutral-950">
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-neutral-800 bg-neutral-925 px-2 text-xs">
-        <StashIcon className="size-3.5 text-neutral-400" />
-        <span className="mono text-neutral-200">{stash.ref}</span>
-        {stash.branch && (
-          <>
-            <ChevronRightIcon className="size-3 text-neutral-600" />
-            <span className="text-neutral-500">on {stash.branch}</span>
-          </>
-        )}
-        {activeFile && (
-          <>
-            <ChevronRightIcon className="size-3 text-neutral-600" />
-            <span className="mono truncate text-neutral-200">{activeFile.path}</span>
-          </>
-        )}
-        <div className="ml-auto flex items-center gap-1">
+    <aside className="flex h-full w-full flex-col border-l border-neutral-800 bg-neutral-925">
+      <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
+        <div className="flex items-center gap-2 text-xs text-neutral-400">
+          <StashIcon className="size-3.5" />
+          <span className="mono text-neutral-200">{stash.ref}</span>
+        </div>
+        <button
+          onClick={() => selectStash(null)}
+          className="rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+          title="Close"
+        >
+          <CloseIcon className="size-3.5" />
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="border-b border-neutral-800 px-4 py-4">
+          <div className="text-[15px] font-medium leading-snug text-neutral-100">
+            {subject || stash.message}
+          </div>
+          {stash.branch && (
+            <div className="mt-1 text-xs text-neutral-500">on {stash.branch}</div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1 border-b border-neutral-800 px-3 py-2 text-xs">
           <button
             disabled={busy}
             onClick={() =>
               run(() => unwrap(window.gitApi.stashApply(stash.index)), "Applied")
             }
-            className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-100 hover:bg-neutral-700 disabled:opacity-50"
+            className="rounded bg-neutral-800 px-2 py-1 text-neutral-100 hover:bg-neutral-700 disabled:opacity-50"
           >
             Apply
           </button>
@@ -124,10 +139,11 @@ export function StashDetail({ index }: { index: number }) {
                 setBusy(false);
               }
             }}
-            className="rounded bg-indigo-500 px-2 py-0.5 text-xs text-white hover:bg-indigo-400 disabled:opacity-50"
+            className="rounded bg-indigo-500 px-2 py-1 text-white hover:bg-indigo-400 disabled:opacity-50"
           >
             Pop
           </button>
+          <div className="flex-1" />
           <button
             disabled={busy}
             onClick={async () => {
@@ -144,110 +160,281 @@ export function StashDetail({ index }: { index: number }) {
                 true,
               );
             }}
-            className="rounded px-2 py-0.5 text-xs text-red-400 hover:bg-neutral-800 disabled:opacity-50"
+            className="rounded px-2 py-1 text-red-400 hover:bg-neutral-800 disabled:opacity-50"
           >
             Drop
           </button>
-          <div className="mx-1 flex rounded border border-neutral-800 p-0.5">
-            <ModeToggle
-              active={viewMode === "unified"}
-              onClick={() => setViewMode("unified")}
-              label="Hunk"
-            />
-            <ModeToggle
-              active={viewMode === "split"}
-              onClick={() => setViewMode("split")}
-              label="Split"
-            />
+        </div>
+
+        <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2 text-xs">
+          <div className="flex items-center gap-2 text-neutral-400">
+            {stats.modified > 0 && (
+              <span>
+                <span className="text-amber-400">{stats.modified}</span> modified
+              </span>
+            )}
+            {stats.added > 0 && (
+              <span>
+                <span className="text-emerald-400">+ {stats.added}</span> added
+              </span>
+            )}
+            {stats.deleted > 0 && (
+              <span>
+                <span className="text-red-400">− {stats.deleted}</span> deleted
+              </span>
+            )}
+            {files?.length === 0 && <span>No files</span>}
           </div>
-          <button
-            onClick={() => selectStash(null)}
-            className="rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
-            title="Close stash (Esc)"
-          >
-            <CloseIcon className="size-3.5" />
-          </button>
+          <div className="flex rounded border border-neutral-800 p-0.5">
+            <ViewToggle
+              active={view === "path"}
+              onClick={() => setView("path")}
+            >
+              <PathIcon className="size-3" /> Path
+            </ViewToggle>
+            <ViewToggle
+              active={view === "tree"}
+              onClick={() => setView("tree")}
+            >
+              <TreeIcon className="size-3" /> Tree
+            </ViewToggle>
+          </div>
         </div>
-      </div>
 
-      <div className="border-b border-neutral-800 px-4 py-3">
-        <div className="text-[15px] font-medium leading-snug text-neutral-100">
-          {subject || stash.message}
-        </div>
-      </div>
-
-      <div className="flex min-h-0 flex-1">
-        {/* File list — only shown when the stash spans multiple files.
-            Keeps the header breadcrumb as the sole UI on single-file
-            stashes to avoid wasted space. */}
-        {files && files.length > 1 && (
-          <ul className="w-64 shrink-0 overflow-y-auto border-r border-neutral-800 bg-neutral-925 py-1 text-sm">
-            {files.map((f) => {
-              const isActive = f.path === activePath;
-              return (
-                <li key={f.path}>
-                  <button
-                    onClick={() => setActivePath(f.path)}
-                    title={f.path}
-                    className={`block w-full truncate px-3 py-1 text-left ${
-                      isActive
-                        ? "bg-indigo-500/15 text-neutral-100"
-                        : "text-neutral-300 hover:bg-neutral-800"
-                    }`}
-                  >
-                    {f.path}
-                  </button>
-                </li>
-              );
-            })}
+        {files === null ? (
+          <div className="px-3 py-6 text-center text-xs text-neutral-500">
+            Loading…
+          </div>
+        ) : files.length === 0 ? (
+          <div className="px-3 py-6 text-center text-xs text-neutral-500">
+            <CommitIcon className="mx-auto size-6 text-neutral-700" />
+            <div className="mt-2">No files</div>
+          </div>
+        ) : view === "path" ? (
+          <ul className="p-1 text-sm">
+            {files.map((f) => (
+              <FileRow
+                key={f.path}
+                file={f}
+                label={f.path}
+                index={index}
+                isActive={
+                  selectedStashFile?.index === index &&
+                  selectedStashFile.path === f.path
+                }
+                onSelect={() => selectStashFile({ index, path: f.path })}
+              />
+            ))}
           </ul>
+        ) : (
+          <TreeView
+            files={files}
+            index={index}
+            selectedStashFile={selectedStashFile}
+            onSelect={(path) => selectStashFile({ index, path })}
+          />
         )}
-
-        <div className="min-h-0 flex-1 overflow-auto">
-          {files === null ? (
-            <div className="p-6 text-center text-xs text-neutral-500">
-              Loading diff…
-            </div>
-          ) : files.length === 0 ? (
-            <div className="p-6 text-center text-xs text-neutral-500">
-              No changes in stash
-            </div>
-          ) : !activeFile ? (
-            <div className="p-6 text-center text-xs text-neutral-500">
-              Select a file
-            </div>
-          ) : activeFile.binary ? (
-            <div className="p-6 text-center text-xs text-neutral-500">
-              Binary file
-            </div>
-          ) : viewMode === "split" ? (
-            <SplitView diff={activeFile} lang={lang} />
-          ) : (
-            <UnifiedView diff={activeFile} lang={lang} />
-          )}
-        </div>
       </div>
-    </div>
+    </aside>
   );
 }
 
-function ModeToggle({
+function ViewToggle({
   active,
   onClick,
-  label,
+  children,
 }: {
   active: boolean;
   onClick: () => void;
-  label: string;
+  children: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded px-2 py-0.5 text-[11px] ${
-        active ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-200"
+      className={`flex items-center gap-1 rounded px-2 py-0.5 text-[11px] ${
+        active
+          ? "bg-neutral-800 text-neutral-100"
+          : "text-neutral-500 hover:text-neutral-200"
       }`}
     >
-      {label}
+      {children}
     </button>
+  );
+}
+
+function FileRow({
+  file,
+  label,
+  depth = 0,
+  isActive,
+  onSelect,
+}: {
+  file: FileDiff;
+  label: string;
+  depth?: number;
+  index: number;
+  isActive: boolean;
+  onSelect: () => void;
+}) {
+  const status = guessStatus(file);
+  return (
+    <button
+      onClick={onSelect}
+      title={file.path}
+      className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left ${
+        isActive ? "bg-indigo-500/15" : "hover:bg-neutral-800"
+      }`}
+      style={{ paddingLeft: 8 + depth * 12 }}
+    >
+      <StatusBadge status={status} />
+      <span className="min-w-0 flex-1 truncate text-neutral-200">{label}</span>
+    </button>
+  );
+}
+
+interface TreeNode {
+  name: string;
+  file?: FileDiff;
+  children: Map<string, TreeNode>;
+}
+
+function buildFileTree(files: FileDiff[]): TreeNode {
+  const root: TreeNode = { name: "", children: new Map() };
+  for (const f of files) {
+    const parts = f.path.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      let child = node.children.get(p);
+      if (!child) {
+        child = { name: p, children: new Map() };
+        node.children.set(p, child);
+      }
+      if (i === parts.length - 1) child.file = f;
+      node = child;
+    }
+  }
+  return root;
+}
+
+function TreeView({
+  files,
+  index,
+  selectedStashFile,
+  onSelect,
+}: {
+  files: FileDiff[];
+  index: number;
+  selectedStashFile: { index: number; path: string } | null;
+  onSelect: (path: string) => void;
+}) {
+  const tree = useMemo(() => buildFileTree(files), [files]);
+  return (
+    <div className="text-sm">
+      {[...tree.children.values()].map((n) => (
+        <TreeNodeRow
+          key={n.name}
+          node={n}
+          depth={0}
+          index={index}
+          selectedStashFile={selectedStashFile}
+          onSelect={onSelect}
+        />
+      ))}
+    </div>
+  );
+}
+
+function TreeNodeRow({
+  node,
+  depth,
+  index,
+  selectedStashFile,
+  onSelect,
+}: {
+  node: TreeNode;
+  depth: number;
+  index: number;
+  selectedStashFile: { index: number; path: string } | null;
+  onSelect: (path: string) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const isFile = !!node.file;
+  if (isFile && node.children.size === 0) {
+    const f = node.file!;
+    return (
+      <FileRow
+        file={f}
+        label={node.name}
+        depth={depth}
+        index={index}
+        isActive={
+          selectedStashFile?.index === index && selectedStashFile.path === f.path
+        }
+        onSelect={() => onSelect(f.path)}
+      />
+    );
+  }
+  return (
+    <>
+      <div
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex cursor-pointer items-center gap-1.5 rounded py-1 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+        style={{ paddingLeft: 8 + depth * 12 }}
+      >
+        <FolderIcon className="size-3.5 shrink-0" />
+        <span className="truncate">{node.name}</span>
+      </div>
+      {!collapsed &&
+        [...node.children.values()].map((c) => (
+          <TreeNodeRow
+            key={c.name}
+            node={c}
+            depth={depth + 1}
+            index={index}
+            selectedStashFile={selectedStashFile}
+            onSelect={onSelect}
+          />
+        ))}
+    </>
+  );
+}
+
+// FileDiff doesn't carry an explicit status field — infer it from the
+// hunk lines so the status badge matches the commit-file list.
+function guessStatus(f: FileDiff): FileStatus {
+  let hasAdd = false;
+  let hasDel = false;
+  for (const h of f.hunks) {
+    for (const l of h.lines) {
+      if (l.type === "add") hasAdd = true;
+      else if (l.type === "del") hasDel = true;
+      if (hasAdd && hasDel) break;
+    }
+  }
+  if (hasAdd && !hasDel) return "added";
+  if (hasDel && !hasAdd) return "deleted";
+  return "modified";
+}
+
+function StatusBadge({ status }: { status: FileStatus }) {
+  const map: Record<FileStatus, { letter: string; color: string }> = {
+    added: { letter: "A", color: "bg-emerald-500/20 text-emerald-300" },
+    modified: { letter: "M", color: "bg-amber-500/20 text-amber-300" },
+    deleted: { letter: "D", color: "bg-red-500/20 text-red-300" },
+    renamed: { letter: "R", color: "bg-blue-500/20 text-blue-300" },
+    untracked: { letter: "?", color: "bg-neutral-700 text-neutral-300" },
+    conflicted: { letter: "!", color: "bg-red-500/30 text-red-300" },
+    typechange: { letter: "T", color: "bg-violet-500/20 text-violet-300" },
+    ignored: { letter: "I", color: "bg-neutral-700 text-neutral-400" },
+  };
+  const s = map[status];
+  return (
+    <span
+      className={`mono flex size-4 shrink-0 items-center justify-center rounded text-[10px] font-bold ${s.color}`}
+      title={status}
+    >
+      {s.letter}
+    </span>
   );
 }
