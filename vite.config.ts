@@ -32,6 +32,14 @@ export default defineConfig({
             outDir: "dist-electron",
             rollupOptions: {
               external: ["electron"],
+              output: {
+                // Emit CJS with a .cjs extension so Node/Electron load it as
+                // CommonJS even though the root package is "type": "module".
+                // ESM preload support in Electron is new and sharp-edged; CJS
+                // is the path of least surprise for contextBridge.
+                format: "cjs",
+                entryFileNames: "[name].cjs",
+              },
             },
           },
           resolve: {
