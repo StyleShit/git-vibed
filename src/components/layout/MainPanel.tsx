@@ -57,30 +57,10 @@ function RepoLoading() {
   );
 }
 
-// Merge/rebase conflict state used to be a tab; with the single-view layout
-// we surface it as a slim banner with a "Resolve conflicts" action that
-// swaps to the merge editor, and a "Back" once the user is editing.
 function ConflictBanner() {
-  const view = useUI((s) => s.view);
-  const setView = useUI((s) => s.setView);
   return (
-    <div className="flex h-8 shrink-0 items-center justify-between border-b border-amber-600/40 bg-amber-500/10 px-3 text-xs text-amber-200">
-      <span>Merge conflicts in this working tree.</span>
-      {view === "merge" ? (
-        <button
-          onClick={() => setView("graph")}
-          className="rounded px-2 py-0.5 text-amber-100 hover:bg-amber-500/20"
-        >
-          ← Back to history
-        </button>
-      ) : (
-        <button
-          onClick={() => setView("merge")}
-          className="rounded bg-amber-500/30 px-2 py-0.5 text-amber-100 hover:bg-amber-500/50"
-        >
-          Resolve conflicts →
-        </button>
-      )}
+    <div className="flex h-8 shrink-0 items-center border-b border-amber-600/40 bg-amber-500/10 px-3 text-xs text-amber-200">
+      <span>Merge conflicts in this working tree — resolve them to continue.</span>
     </div>
   );
 }

@@ -33,6 +33,12 @@ export function ChangesPanel() {
   const confirmDialog = useConfirm();
   const selectWipFile = useUI((s) => s.selectWipFile);
   const selectedWipFile = useUI((s) => s.selectedWipFile);
+  const setView = useUI((s) => s.setView);
+  const selectConflictFile = useUI((s) => s.selectConflictFile);
+  const resolve = (path: string) => {
+    selectConflictFile(path);
+    setView("merge");
+  };
   const viewMode = useSettings((s) => s.fileListViewMode);
   const setViewMode = useSettings((s) => s.setFileListViewMode);
   // Multi-selection lives on a per-section basis (staged vs unstaged) —
@@ -261,6 +267,7 @@ export function ChangesPanel() {
           fileLabel="Stage"
           onExtra={(f) => discard([f.path])}
           extraLabel="Discard"
+          onResolve={resolve}
           emptyLabel="Working tree clean"
         />
       </div>
@@ -436,6 +443,7 @@ function Section({
   fileLabel,
   onExtra,
   extraLabel,
+  onResolve,
   emptyLabel,
 }: {
   title: string;
@@ -463,6 +471,7 @@ function Section({
   fileLabel: string;
   onExtra?: (f: FileChange) => void;
   extraLabel?: string;
+  onResolve?: (path: string) => void;
   emptyLabel: string;
 }) {
   const staged = section === "staged";
@@ -510,6 +519,9 @@ function Section({
               actionLabel={fileLabel}
               onExtra={onExtra ? () => onExtra(f) : undefined}
               extraLabel={extraLabel}
+              onResolve={
+                onResolve && f.status === "conflicted" ? () => onResolve(f.path) : undefined
+              }
             />
           ))}
         </div>
@@ -525,6 +537,7 @@ function Section({
           actionLabel={fileLabel}
           onExtra={onExtra}
           extraLabel={extraLabel}
+          onResolve={onResolve}
         />
       )}
     </div>
@@ -543,6 +556,7 @@ function FileRow({
   actionLabel,
   onExtra,
   extraLabel,
+  onResolve,
 }: {
   file: FileChange;
   label: string;
@@ -557,6 +571,7 @@ function FileRow({
   actionLabel: string;
   onExtra?: () => void;
   extraLabel?: string;
+  onResolve?: () => void;
 }) {
   return (
     <div
@@ -578,6 +593,14 @@ function FileRow({
         className="absolute inset-y-0.5 right-1 hidden items-center gap-0.5 rounded bg-neutral-800/95 px-1 shadow-lg backdrop-blur-sm group-hover:flex"
         onClick={(e) => e.stopPropagation()}
       >
+        {onResolve && (
+          <button
+            onClick={onResolve}
+            className="rounded bg-fuchsia-500/25 px-1.5 py-0.5 text-[11px] text-fuchsia-100 hover:bg-fuchsia-500/40"
+          >
+            Resolve
+          </button>
+        )}
         {onExtra && extraLabel && (
           <button
             onClick={onExtra}
@@ -648,6 +671,7 @@ function TreeView({
   actionLabel,
   onExtra,
   extraLabel,
+  onResolve,
 }: {
   files: FileChange[];
   section: "staged" | "unstaged";
@@ -667,6 +691,7 @@ function TreeView({
   actionLabel: string;
   onExtra?: (f: FileChange) => void;
   extraLabel?: string;
+  onResolve?: (path: string) => void;
 }) {
   const tree = useMemo(() => buildTree(files), [files]);
   return (
@@ -685,6 +710,7 @@ function TreeView({
           actionLabel={actionLabel}
           onExtra={onExtra}
           extraLabel={extraLabel}
+          onResolve={onResolve}
         />
       ))}
     </div>
@@ -703,6 +729,7 @@ function TreeNodeRow({
   actionLabel,
   onExtra,
   extraLabel,
+  onResolve,
 }: {
   node: TreeNode;
   depth: number;
@@ -723,6 +750,7 @@ function TreeNodeRow({
   actionLabel: string;
   onExtra?: (f: FileChange) => void;
   extraLabel?: string;
+  onResolve?: (path: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const staged = section === "staged";
@@ -742,6 +770,9 @@ function TreeNodeRow({
         actionLabel={actionLabel}
         onExtra={onExtra ? () => onExtra(f) : undefined}
         extraLabel={extraLabel}
+        onResolve={
+          onResolve && f.status === "conflicted" ? () => onResolve(f.path) : undefined
+        }
       />
     );
   }
@@ -775,6 +806,7 @@ function TreeNodeRow({
             actionLabel={actionLabel}
             onExtra={onExtra}
             extraLabel={extraLabel}
+            onResolve={onResolve}
           />
         ))}
     </>
