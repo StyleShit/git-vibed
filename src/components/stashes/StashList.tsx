@@ -3,12 +3,14 @@ import { useActive, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { StashIcon, BranchIcon } from "../ui/Icons";
+import { useConfirm } from "../ui/Confirm";
 import type { Stash } from "@shared/types";
 
 export function StashList({ filter }: { filter: string }) {
   const stashes = useActive("stashes") ?? [];
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
+  const confirmDialog = useConfirm();
   const selectStash = useUI((s) => s.selectStash);
   const selectedStash = useUI((s) => s.selectedStash);
   const [busy, setBusy] = useState<number | null>(null);
@@ -41,7 +43,13 @@ export function StashList({ filter }: { filter: string }) {
   }
 
   async function drop(stash: Stash) {
-    if (!confirm(`Drop ${stash.ref}? This can't be undone.`)) return;
+    const ok = await confirmDialog({
+      title: "Drop stash",
+      message: `Drop ${stash.ref}?\nThis can't be undone.`,
+      confirmLabel: "Drop",
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(stash.index);
     try {
       await unwrap(window.gitApi.stashDrop(stash.index));
