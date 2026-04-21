@@ -30,7 +30,11 @@ export class RepoWatcher {
       [
         path.join(gitDir, "HEAD"),
         path.join(gitDir, "index"),
-        path.join(gitDir, "refs"),
+        // Don't recurse into `refs/` — on huge repos (tens of thousands
+        // of loose refs) chokidar opens an fs.watch handle per file and
+        // blows the per-process FD limit (EMFILE), which takes the
+        // whole main process down. packed-refs covers most of the
+        // refs churn after gc, and HEAD/index cover the hot paths.
         path.join(gitDir, "packed-refs"),
         path.join(gitDir, "MERGE_HEAD"),
         path.join(gitDir, "rebase-merge"),
@@ -38,7 +42,7 @@ export class RepoWatcher {
       ],
       {
         ignoreInitial: true,
-        depth: 4,
+        depth: 0,
         awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
       },
     );

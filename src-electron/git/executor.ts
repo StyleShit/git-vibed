@@ -19,7 +19,7 @@ import type {
   Tag,
   Worktree,
 } from "../../src/shared/types.js";
-import { parseGitLog } from "./parser.js";
+import { parseGitLog, parseUnifiedDiff } from "./parser.js";
 
 const execFileP = promisify(execFile);
 
@@ -32,7 +32,14 @@ export class GitExecutor {
 
   constructor(repoPath: string) {
     this.repoPath = repoPath;
-    this.git = simpleGit({ baseDir: repoPath });
+    // Bump max-buffer so commands like `for-each-ref` or `log` on huge
+    // repos don't blow past simple-git's default 10MB and reject. 128MB
+    // is generous but still capped — a repo with enough output to
+    // exceed this should be paginated, not buffered.
+    this.git = simpleGit({ baseDir: repoPath, maxConcurrentProcesses: 3 }).env(
+      "GIT_OPTIONAL_LOCKS",
+      "0",
+    );
   }
 
   // ---- Repo / status -----------------------------------------------------
@@ -142,6 +149,16 @@ export class GitExecutor {
     );
   }
 
+  // Hunk/line-level discard. Reverse-apply the patch to the working tree
+  // (no --cached) so the selected region is rolled back to HEAD without
+  // touching other changes in the file or the index.
+  async discardPatch(patch: string): Promise<void> {
+    await this.runGitWithStdin(
+      ["apply", "--reverse", "--whitespace=nowarn", "-"],
+      patch,
+    );
+  }
+
   // ---- Commit / log ------------------------------------------------------
 
   async commit(opts: CommitOptions): Promise<string> {
@@ -171,33 +188,49 @@ export class GitExecutor {
       "--parents",
       "--decorate=full",
       "--date=unix",
-      "--format=%H%x01%P%x01%an%x01%ae%x01%at%x01%D%x01%s%x02",
+      // Subject + body split on \x01, record terminated by \x02. Including
+      // the body lets the renderer preload multi-line messages when
+      // amending without a second IPC round-trip.
+      "--format=%H%x01%P%x01%an%x01%ae%x01%at%x01%D%x01%s%x01%b%x02",
       ...(opts.limit ? [`-n${opts.limit}`] : ["-n500"]),
       ...(opts.skip && opts.skip > 0 ? [`--skip=${opts.skip}`] : []),
       ...(opts.branch && !opts.all ? [opts.branch] : []),
     ];
-    const raw = await this.git.raw(args);
+    // Larger maxBuffer — a single commit with a massive body (dependabot-
+    // style multi-kilobyte descriptions) can push a 500-commit page well
+    // past simple-git's default 10MB cap.
+    const { stdout: raw } = await execFileP("git", args, {
+      cwd: this.repoPath,
+      maxBuffer: 128 * 1024 * 1024,
+    });
     return parseGitLog(raw);
   }
 
   // ---- Branches ----------------------------------------------------------
 
   async branches(): Promise<Branch[]> {
-    const summary = await this.git.branch(["-a", "-v", "--format=%(refname:short)|%(refname)|%(HEAD)|%(upstream:short)|%(upstream:track)|%(objectname:short)"]);
-    // simple-git returns the raw string in summary.all for --format; fall back
-    // to calling raw() directly when --format isn't honored by the installed
-    // simple-git version.
+    // Use execFile directly so we can set a generous maxBuffer; simple-git's
+    // default (~10MB) is too tight for monorepos with tens of thousands of
+    // remote refs. Also cap with --count so we never spend minutes waiting
+    // on the longest tail of refs — anything over 5000 refs is almost
+    // certainly unused branches from abandoned PRs.
     let lines: string[];
     try {
-      const raw = await this.git.raw([
-        "for-each-ref",
-        "--format=%(refname:short)|%(refname)|%(HEAD)|%(upstream:short)|%(upstream:track)|%(objectname:short)",
-        "refs/heads",
-        "refs/remotes",
-      ]);
-      lines = raw.split("\n").filter(Boolean);
+      const { stdout } = await execFileP(
+        "git",
+        [
+          "for-each-ref",
+          "--count=5000",
+          "--sort=-committerdate",
+          "--format=%(refname:short)|%(refname)|%(HEAD)|%(upstream:short)|%(upstream:track)|%(objectname:short)",
+          "refs/heads",
+          "refs/remotes",
+        ],
+        { cwd: this.repoPath, maxBuffer: 64 * 1024 * 1024 },
+      );
+      lines = stdout.split("\n").filter(Boolean);
     } catch {
-      lines = Object.keys(summary.branches);
+      lines = [];
     }
     return lines.map((line): Branch => {
       const [name, fullName, head, tracking, track, hash] = line.split("|");
@@ -233,8 +266,30 @@ export class GitExecutor {
     await this.git.raw(["branch", "-m", oldName, newName]);
   }
 
+  // Set (or clear) a local branch's upstream tracking target. Pass null for
+  // `upstream` to unset tracking entirely; otherwise pass a qualified ref
+  // like `origin/main`.
+  async branchSetUpstream(branch: string, upstream: string | null): Promise<void> {
+    if (upstream === null) {
+      await this.git.raw(["branch", "--unset-upstream", branch]);
+      return;
+    }
+    await this.git.raw([
+      "branch",
+      `--set-upstream-to=${upstream}`,
+      branch,
+    ]);
+  }
+
   async checkout(branch: string): Promise<void> {
     await this.git.checkout(branch);
+  }
+
+  // Create a new local branch from an arbitrary start-point and check it
+  // out. Typical use: `git checkout -b main origin/main` to land a local
+  // tracking copy when the user picks a remote branch from the graph.
+  async checkoutCreate(localName: string, startPoint: string): Promise<void> {
+    await this.git.raw(["checkout", "-b", localName, startPoint]);
   }
 
   // Merge / rebase — return conflict list if the operation left a conflict.
@@ -302,9 +357,13 @@ export class GitExecutor {
     await this.git.raw(["reset", `--${mode}`, target]);
   }
 
-  async stash(message?: string): Promise<void> {
+  async stash(message?: string, files?: string[]): Promise<void> {
     const args = ["stash", "push"];
     if (message) args.push("-m", message);
+    // Partial stash — when a file list is provided, git stashes only
+    // those paths and leaves the rest in the working tree. Useful for
+    // "stash these files" from the changes-panel context menu.
+    if (files && files.length > 0) args.push("--", ...files);
     await this.git.raw(args);
   }
 
@@ -362,17 +421,48 @@ export class GitExecutor {
     }
   }
 
+  // Parsed flavor of stash show — returns a FileDiff per stashed file so
+  // the renderer can reuse the same UnifiedView/SplitView components it
+  // uses for commits and WIP diffs instead of rolling its own line
+  // renderer.
+  async stashShowFiles(index: number): Promise<import("../../src/shared/types.js").FileDiff[]> {
+    try {
+      const { stdout: raw } = await execFileP(
+        "git",
+        ["stash", "show", "-p", `stash@{${index}}`, "--no-color"],
+        { cwd: this.repoPath, maxBuffer: 64 * 1024 * 1024 },
+      );
+      const parsed = parseUnifiedDiff(raw);
+      return parsed.map((f) => ({
+        path: f.path,
+        oldPath: f.oldPath,
+        binary: f.binary,
+        hunks: f.hunks,
+        raw: f.raw,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
   // ---- Tags --------------------------------------------------------------
 
   async tags(): Promise<Tag[]> {
     try {
-      // type=commit for lightweight, type=tag for annotated. We grab both and
-      // the subject for annotated tags (empty for lightweight).
-      const raw = await this.git.raw([
-        "for-each-ref",
-        "--format=%(refname:short)%x01%(objectname)%x01%(objecttype)%x01%(subject)",
-        "refs/tags",
-      ]);
+      // Same treatment as branches() — bigger buffer + cap the tail so a
+      // repo with 50k tags doesn't freeze the UI on first open. Sort by
+      // taggerdate so the 5000 we keep are the most recent.
+      const { stdout: raw } = await execFileP(
+        "git",
+        [
+          "for-each-ref",
+          "--count=5000",
+          "--sort=-taggerdate",
+          "--format=%(refname:short)\x01%(objectname)\x01%(objecttype)\x01%(subject)",
+          "refs/tags",
+        ],
+        { cwd: this.repoPath, maxBuffer: 64 * 1024 * 1024 },
+      );
       const out: Tag[] = [];
       for (const line of raw.split("\n")) {
         if (!line) continue;

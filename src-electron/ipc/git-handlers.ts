@@ -54,6 +54,7 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   );
   ipc.handle(GIT.DISCARD_PATCH, (_e, patch: string) =>
     wrap(() => exec(repo).discardPatch(patch)),
+  );
   ipc.handle(GIT.DISCARD, (_e, files: string[]) => wrap(() => exec(repo).discard(files)));
   ipc.handle(GIT.MARK_RESOLVED, (_e, files: string[]) =>
     wrap(() => exec(repo).markResolved(files)),
@@ -92,7 +93,17 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
     (_e, { oldName, newName }: { oldName: string; newName: string }) =>
       wrap(() => exec(repo).branchRename(oldName, newName)),
   );
+  ipc.handle(
+    GIT.BRANCH_SET_UPSTREAM,
+    (_e, { branch, upstream }: { branch: string; upstream: string | null }) =>
+      wrap(() => exec(repo).branchSetUpstream(branch, upstream)),
+  );
   ipc.handle(GIT.CHECKOUT, (_e, branch: string) => wrap(() => exec(repo).checkout(branch)));
+  ipc.handle(
+    GIT.CHECKOUT_CREATE,
+    (_e, { name, startPoint }: { name: string; startPoint: string }) =>
+      wrap(() => exec(repo).checkoutCreate(name, startPoint)),
+  );
 
   ipc.handle(GIT.MERGE, (_e, branch: string) => wrap(() => exec(repo).merge(branch)));
   ipc.handle(GIT.MERGE_ABORT, () => wrap(() => exec(repo).mergeAbort()));
@@ -108,7 +119,17 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
     (_e, { target, mode }: { target: string; mode: "soft" | "mixed" | "hard" }) =>
       wrap(() => exec(repo).reset(target, mode)),
   );
-  ipc.handle(GIT.STASH, (_e, message?: string) => wrap(() => exec(repo).stash(message)));
+  ipc.handle(
+    GIT.STASH,
+    (_e, payload?: string | { message?: string; files?: string[] }) => {
+      // Backwards-compat: older callers pass the message as a bare string.
+      const opts =
+        typeof payload === "string"
+          ? { message: payload, files: undefined }
+          : (payload ?? {});
+      return wrap(() => exec(repo).stash(opts.message, opts.files));
+    },
+  );
   ipc.handle(GIT.STASH_POP, () => wrap(() => exec(repo).stashPop()));
 
   ipc.handle(GIT.PULL, (_e, opts: PullOptions) => wrap(() => exec(repo).pull(opts)));
@@ -154,6 +175,9 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   ipc.handle(GIT.STASH_APPLY, (_e, index: number) => wrap(() => exec(repo).stashApply(index)));
   ipc.handle(GIT.STASH_DROP, (_e, index: number) => wrap(() => exec(repo).stashDrop(index)));
   ipc.handle(GIT.STASH_SHOW, (_e, index: number) => wrap(() => exec(repo).stashShow(index)));
+  ipc.handle(GIT.STASH_SHOW_FILES, (_e, index: number) =>
+    wrap(() => exec(repo).stashShowFiles(index)),
+  );
 
   ipc.handle(GIT.TAGS, () => wrap(() => exec(repo).tags()));
   ipc.handle(

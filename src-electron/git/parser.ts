@@ -1,15 +1,15 @@
 import type { Commit } from "../../src/shared/types.js";
 
 // Parses git log output produced with the format string:
-//   %H\x01%P\x01%an\x01%ae\x01%at\x01%D\x01%s\x02
-// The \x02 (record separator) terminates each commit so subjects containing
-// newlines don't corrupt parsing.
+//   %H\x01%P\x01%an\x01%ae\x01%at\x01%D\x01%s\x01%b\x02
+// The \x02 (record separator) terminates each commit so subjects/bodies
+// containing newlines don't corrupt parsing.
 export function parseGitLog(raw: string): Commit[] {
   if (!raw) return [];
   const records = raw.split("\x02").filter((r) => r.trim().length > 0);
   return records.map((record) => {
     const trimmed = record.startsWith("\n") ? record.slice(1) : record;
-    const [hash, parents, author, email, timestamp, decorations, subject = ""] =
+    const [hash, parents, author, email, timestamp, decorations, subject = "", body = ""] =
       trimmed.split("\x01");
     return {
       hash: hash?.trim() ?? "",
@@ -18,6 +18,7 @@ export function parseGitLog(raw: string): Commit[] {
       email: email ?? "",
       timestamp: Number(timestamp) || 0,
       subject: subject.trim(),
+      body: body.trim() || undefined,
       refs: parseDecorations(decorations ?? ""),
     };
   });
@@ -30,11 +31,26 @@ function parseDecorations(decoration: string): string[] {
     .map((d) => d.trim())
     .filter(Boolean)
     .map((d) => {
-      // Normalize "HEAD -> main" and "tag: v1.0" into their ref portions.
-      if (d.startsWith("HEAD -> ")) return d.slice("HEAD -> ".length);
-      if (d.startsWith("tag: ")) return `tag:${d.slice("tag: ".length)}`;
-      return d;
+      // `git log --decorate=full` emits refs under their full paths
+      // (refs/heads/…, refs/remotes/…, refs/tags/…). Normalize those to
+      // the same short shape the renderer already assumes — otherwise
+      // the ref badge sees `refs/remotes/origin/main`, strips the first
+      // "refs/" segment, and renders a broken label.
+      if (d.startsWith("HEAD -> ")) {
+        const rest = d.slice("HEAD -> ".length);
+        return stripRefPrefix(rest);
+      }
+      if (d.startsWith("tag: ")) return `tag:${stripRefPrefix(d.slice("tag: ".length))}`;
+      if (d.startsWith("refs/tags/")) return `tag:${d.slice("refs/tags/".length)}`;
+      return stripRefPrefix(d);
     });
+}
+
+function stripRefPrefix(ref: string): string {
+  if (ref.startsWith("refs/heads/")) return ref.slice("refs/heads/".length);
+  if (ref.startsWith("refs/remotes/")) return ref.slice("refs/remotes/".length);
+  if (ref.startsWith("refs/tags/")) return ref.slice("refs/tags/".length);
+  return ref;
 }
 
 // Parse a unified diff into FileDiffs (one per file section).

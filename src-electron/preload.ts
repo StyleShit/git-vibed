@@ -50,6 +50,7 @@ const gitApi = {
   unstage: (files: string[]) => invoke<void>(GIT.UNSTAGE, files),
   stagePatch: (patch: string) => invoke<void>(GIT.STAGE_PATCH, patch),
   unstagePatch: (patch: string) => invoke<void>(GIT.UNSTAGE_PATCH, patch),
+  discardPatch: (patch: string) => invoke<void>(GIT.DISCARD_PATCH, patch),
   discard: (files: string[]) => invoke<void>(GIT.DISCARD, files),
   markResolved: (files: string[]) => invoke<void>(GIT.MARK_RESOLVED, files),
 
@@ -64,7 +65,11 @@ const gitApi = {
     invoke<void>(GIT.BRANCH_DELETE, { name, force }),
   branchRename: (oldName: string, newName: string) =>
     invoke<void>(GIT.BRANCH_RENAME, { oldName, newName }),
+  branchSetUpstream: (branch: string, upstream: string | null) =>
+    invoke<void>(GIT.BRANCH_SET_UPSTREAM, { branch, upstream }),
   checkout: (branch: string) => invoke<void>(GIT.CHECKOUT, branch),
+  checkoutCreate: (name: string, startPoint: string) =>
+    invoke<void>(GIT.CHECKOUT_CREATE, { name, startPoint }),
   merge: (branch: string) => invoke<{ conflicts: string[] }>(GIT.MERGE, branch),
   rebase: (onto: string) => invoke<{ conflicts: string[] }>(GIT.REBASE, onto),
   rebaseContinue: () => invoke<{ conflicts: string[] }>(GIT.REBASE_CONTINUE),
@@ -75,7 +80,8 @@ const gitApi = {
   revert: (hash: string) => invoke<void>(GIT.REVERT, hash),
   reset: (target: string, mode: "soft" | "mixed" | "hard") =>
     invoke<void>(GIT.RESET, { target, mode }),
-  stash: (message?: string) => invoke<void>(GIT.STASH, message),
+  stash: (opts?: { message?: string; files?: string[] } | string) =>
+    invoke<void>(GIT.STASH, opts),
   stashPop: () => invoke<void>(GIT.STASH_POP),
 
   pull: (opts: PullOptions) => invoke<string>(GIT.PULL, opts),
@@ -104,6 +110,8 @@ const gitApi = {
   stashApply: (index: number) => invoke<void>(GIT.STASH_APPLY, index),
   stashDrop: (index: number) => invoke<void>(GIT.STASH_DROP, index),
   stashShow: (index: number) => invoke<string>(GIT.STASH_SHOW, index),
+  stashShowFiles: (index: number) =>
+    invoke<FileDiff[]>(GIT.STASH_SHOW_FILES, index),
 
   tags: () => invoke<Tag[]>(GIT.TAGS),
   tagCreate: (name: string, ref: string, message?: string) =>
