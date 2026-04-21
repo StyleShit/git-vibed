@@ -45,6 +45,9 @@ export const GIT = {
   SHOW_OPEN_DIALOG: "git:show-open-dialog",
   OPEN_EXTERNAL: "git:open-external",
   RECENT_REPOS: "git:recent-repos",
+  CLOSE_REPO: "git:close-repo",
+  SET_ACTIVE_REPO: "git:set-active-repo",
+  OPEN_REPOS: "git:open-repos",
 } as const;
 
 export const GH = {

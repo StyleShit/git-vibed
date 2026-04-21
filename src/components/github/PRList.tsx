@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { useRepo } from "../../stores/repo";
+import { useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import type { PullRequest } from "@shared/types";
 
 export function PRList({ filter }: { filter: string }) {
-  const prs = useRepo((s) => s.prs);
+  const prs = useActive("prs") ?? [];
   const selectPR = useUI((s) => s.selectPR);
   const filtered = useMemo(
     () =>

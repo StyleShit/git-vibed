@@ -3,17 +3,21 @@ import path from "node:path";
 import fs from "node:fs";
 import type { RepoChangedEvent } from "../../src/shared/types.js";
 
+// The watcher emits this minimal shape; RepoSession wraps it with repoPath
+// before it hits the renderer.
+export type WatcherEvent = Pick<RepoChangedEvent, "type">;
+
 // Watches the .git directory and emits coarse-grained change events. We only
 // care about a few specific files — rebroadcasting every FS event from .git
 // would be noisy (e.g. pack writes during a fetch).
 export class RepoWatcher {
   private watcher: FSWatcher | null = null;
   private debounce: NodeJS.Timeout | null = null;
-  private pending: Set<RepoChangedEvent["type"]> = new Set();
+  private pending: Set<WatcherEvent["type"]> = new Set();
 
   constructor(
     private readonly repoPath: string,
-    private readonly onChange: (e: RepoChangedEvent) => void,
+    private readonly onChange: (e: WatcherEvent) => void,
   ) {}
 
   start() {
@@ -68,7 +72,7 @@ export class RepoWatcher {
     };
   }
 
-  private classify(filePath: string): RepoChangedEvent["type"] {
+  private classify(filePath: string): WatcherEvent["type"] {
     const base = path.basename(filePath);
     if (base === "HEAD") return "head";
     if (base === "index") return "index";
@@ -76,7 +80,7 @@ export class RepoWatcher {
     return "worktree";
   }
 
-  private queue(type: RepoChangedEvent["type"]) {
+  private queue(type: WatcherEvent["type"]) {
     this.pending.add(type);
     if (this.debounce) clearTimeout(this.debounce);
     this.debounce = setTimeout(() => {

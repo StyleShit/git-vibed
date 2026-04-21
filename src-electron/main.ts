@@ -94,7 +94,7 @@ app.whenReady().then(() => {
   });
 
   registerGitHandlers(ipcMain, repoManager);
-  registerGhHandlers(ipcMain, () => repoManager?.repoPath ?? null);
+  registerGhHandlers(ipcMain, () => repoManager?.activePath ?? null);
 
   // App-level handlers that don't fit neatly into git/gh modules.
   ipcMain.handle(GIT.SHOW_OPEN_DIALOG, async () => {

@@ -1,5 +1,5 @@
 import { useUI } from "../../stores/ui";
-import { useRepo } from "../../stores/repo";
+import { useActive } from "../../stores/repo";
 import { BranchGraph } from "../graph/BranchGraph";
 import { ChangesView } from "../commit/ChangesView";
 import { RemotesPanel } from "../remotes/RemotesPanel";
@@ -10,7 +10,7 @@ import { ConflictList } from "../merge/ConflictList";
 
 export function MainPanel() {
   const view = useUI((s) => s.view);
-  const status = useRepo((s) => s.status);
+  const status = useActive("status") ?? null;
   const inConflict = (status?.conflicted.length ?? 0) > 0;
 
   return (
@@ -36,7 +36,7 @@ export function MainPanel() {
 function ViewTabs({ inConflict }: { inConflict: boolean }) {
   const view = useUI((s) => s.view);
   const setView = useUI((s) => s.setView);
-  const status = useRepo((s) => s.status);
+  const status = useActive("status") ?? null;
   const unstagedCount = (status?.unstaged.length ?? 0) + (status?.conflicted.length ?? 0);
   const stagedCount = status?.staged.length ?? 0;
   const changesBadge = unstagedCount + stagedCount;

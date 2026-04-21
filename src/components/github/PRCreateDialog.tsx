@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { Dialog } from "../ui/Dialog";
-import { useRepo } from "../../stores/repo";
+import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap, maybe } from "../../lib/ipc";
 
 export function PRCreateDialog({ onClose }: { onClose: () => void }) {
-  const { status, branches, refreshPRs } = useRepo();
+  const { status, branches } = useActiveTabShallow((t) => ({
+    status: t?.status ?? null,
+    branches: t?.branches ?? [],
+  }));
+  const refreshPRs = useRepo((s) => s.refreshPRs);
   const toast = useUI((s) => s.toast);
   const [title, setTitle] = useState(status?.branch ?? "");
   const [body, setBody] = useState("");

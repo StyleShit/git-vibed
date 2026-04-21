@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { Dialog } from "../ui/Dialog";
-import { useRepo } from "../../stores/repo";
+import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 
 export function BranchCreateDialog({ onClose }: { onClose: () => void }) {
-  const { branches, status, refreshAll } = useRepo();
+  const { branches, status } = useActiveTabShallow((t) => ({
+    branches: t?.branches ?? [],
+    status: t?.status ?? null,
+  }));
+  const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const [name, setName] = useState("");
   const [base, setBase] = useState(status?.branch ?? "HEAD");

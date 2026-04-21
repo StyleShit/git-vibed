@@ -12,8 +12,9 @@ export function useKeyboardShortcuts() {
     async function handler(e: KeyboardEvent) {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
-      const { repoPath, status } = useRepo.getState();
-      if (!repoPath) return;
+      const active = useRepo.getState().tabs[useRepo.getState().activeIdx];
+      if (!active) return;
+      const status = active.status;
 
       // Cmd/Ctrl + Enter — commit (only if a message box has text). Delegated
       // to the commit panel which owns the input state.

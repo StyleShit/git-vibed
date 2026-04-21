@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { StagingArea } from "./StagingArea";
 import { CommitPanel } from "./CommitPanel";
 import { DiffViewer } from "./DiffViewer";
-import { useRepo } from "../../stores/repo";
+import { useActive } from "../../stores/repo";
 
 export function ChangesView() {
-  const { status } = useRepo();
+  const status = useActive("status") ?? null;
   const [selected, setSelected] = useState<{ path: string; staged: boolean } | null>(null);
 
   // Clear selection when the file disappears from the change list.

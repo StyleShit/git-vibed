@@ -1,10 +1,12 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type { Branch, Commit, PullRequest, RepoStatus, Remote } from "@shared/types";
 import { unwrap, maybe } from "../lib/ipc";
 
-interface RepoState {
-  repoPath: string | null;
-  loading: boolean;
+// Per-tab data. Each open repository has its own slice, so switching tabs
+// surfaces the other repo's state instantly without re-fetching.
+export interface TabData {
+  path: string;
   status: RepoStatus | null;
   branches: Branch[];
   commits: Commit[];
@@ -12,85 +14,183 @@ interface RepoState {
   prs: PullRequest[];
   ghAvailable: boolean;
   behindRemote: number;
+  loading: boolean;
+}
 
-  open: (path: string) => Promise<void>;
-  refreshAll: () => Promise<void>;
-  refreshStatus: () => Promise<void>;
-  refreshBranches: () => Promise<void>;
-  refreshLog: (opts?: { all?: boolean }) => Promise<void>;
-  refreshRemotes: () => Promise<void>;
-  refreshPRs: () => Promise<void>;
-  setGhAvailable: (v: boolean) => void;
-  setBehindRemote: (v: number) => void;
+interface RepoState {
+  tabs: TabData[];
+  activeIdx: number;
+
+  // Tab lifecycle
+  openRepo: (path: string) => Promise<void>;
+  closeTab: (path: string) => Promise<void>;
+  setActive: (idx: number) => Promise<void>;
+
+  // Per-tab data updaters (always operate on active tab unless specified).
+  patchTab: (path: string, patch: Partial<TabData>) => void;
+  refreshAll: (repoPath?: string) => Promise<void>;
+  refreshStatus: (repoPath?: string) => Promise<void>;
+  refreshBranches: (repoPath?: string) => Promise<void>;
+  refreshLog: (opts?: { all?: boolean }, repoPath?: string) => Promise<void>;
+  refreshRemotes: (repoPath?: string) => Promise<void>;
+  refreshPRs: (repoPath?: string) => Promise<void>;
+  setBehindRemote: (repoPath: string, v: number) => void;
+}
+
+// Guards against concurrent opens of the same path (e.g. React 19 StrictMode
+// double-firing a useEffect) — without this we'd push two tabs with the same
+// key before either finished resolving.
+const opensInFlight = new Set<string>();
+
+function emptyTab(path: string): TabData {
+  return {
+    path,
+    status: null,
+    branches: [],
+    commits: [],
+    remotes: [],
+    prs: [],
+    ghAvailable: false,
+    behindRemote: 0,
+    loading: true,
+  };
 }
 
 export const useRepo = create<RepoState>((set, get) => ({
-  repoPath: null,
-  loading: false,
-  status: null,
-  branches: [],
-  commits: [],
-  remotes: [],
-  prs: [],
-  ghAvailable: false,
-  behindRemote: 0,
+  tabs: [],
+  activeIdx: -1,
 
-  open: async (repoPath) => {
-    set({ loading: true });
+  openRepo: async (repoPath) => {
+    if (opensInFlight.has(repoPath)) return;
+    // Dedup: if this repo is already open, just switch to it.
+    const existing = get().tabs.findIndex((t) => t.path === repoPath);
+    if (existing !== -1) {
+      await get().setActive(existing);
+      return;
+    }
+    opensInFlight.add(repoPath);
     try {
       const resolved = await unwrap(window.gitApi.openRepo(repoPath));
-      set({ repoPath: resolved });
-      const available = (await maybe(window.ghApi.available())) ?? false;
-      set({ ghAvailable: available });
-      await get().refreshAll();
+      // Re-check after the IPC round trip: the path may have normalized into
+      // something already in tabs, or a parallel call may have won the race.
+      const postIdx = get().tabs.findIndex((t) => t.path === resolved);
+      if (postIdx !== -1) {
+        await get().setActive(postIdx);
+        return;
+      }
+      const ghAvailable = (await maybe(window.ghApi.available())) ?? false;
+      set((s) => ({
+        tabs: [...s.tabs, { ...emptyTab(resolved), ghAvailable }],
+        activeIdx: s.tabs.length,
+      }));
+      await get().refreshAll(resolved);
+      get().patchTab(resolved, { loading: false });
     } finally {
-      set({ loading: false });
+      opensInFlight.delete(repoPath);
     }
   },
 
-  refreshAll: async () => {
+  closeTab: async (path) => {
+    const idx = get().tabs.findIndex((t) => t.path === path);
+    if (idx === -1) return;
+    await maybe(window.gitApi.closeRepo(path));
+    set((s) => {
+      const tabs = s.tabs.filter((_, i) => i !== idx);
+      let activeIdx = s.activeIdx;
+      if (tabs.length === 0) activeIdx = -1;
+      else if (idx < s.activeIdx) activeIdx = s.activeIdx - 1;
+      else if (idx === s.activeIdx) activeIdx = Math.min(idx, tabs.length - 1);
+      return { tabs, activeIdx };
+    });
+    // Sync main's "active" pointer to match the new active tab.
+    const next = get().tabs[get().activeIdx];
+    if (next) await maybe(window.gitApi.setActiveRepo(next.path));
+  },
+
+  setActive: async (idx) => {
+    const tab = get().tabs[idx];
+    if (!tab) return;
+    // Wait for main to acknowledge the active switch before setting activeIdx
+    // so subsequent IPC calls hit the right session.
+    await maybe(window.gitApi.setActiveRepo(tab.path));
+    set({ activeIdx: idx });
+  },
+
+  patchTab: (path, patch) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.path === path ? { ...t, ...patch } : t)),
+    }));
+  },
+
+  refreshAll: async (repoPath) => {
+    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
+    if (!path) return;
     await Promise.all([
-      get().refreshStatus(),
-      get().refreshBranches(),
-      get().refreshLog({ all: true }),
-      get().refreshRemotes(),
-      get().refreshPRs(),
+      get().refreshStatus(path),
+      get().refreshBranches(path),
+      get().refreshLog({ all: true }, path),
+      get().refreshRemotes(path),
+      get().refreshPRs(path),
     ]);
   },
 
-  refreshStatus: async () => {
-    if (!get().repoPath) return;
+  refreshStatus: async (repoPath) => {
+    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
+    if (!path) return;
     const status = await maybe(window.gitApi.status());
-    if (status) set({ status });
+    if (status) get().patchTab(path, { status });
   },
 
-  refreshBranches: async () => {
-    if (!get().repoPath) return;
+  refreshBranches: async (repoPath) => {
+    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
+    if (!path) return;
     const branches = await maybe(window.gitApi.branches());
-    if (branches) set({ branches });
+    if (branches) get().patchTab(path, { branches });
   },
 
-  refreshLog: async (opts) => {
-    if (!get().repoPath) return;
+  refreshLog: async (opts, repoPath) => {
+    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
+    if (!path) return;
     const commits = await maybe(window.gitApi.log({ all: opts?.all ?? true, limit: 500 }));
-    if (commits) set({ commits });
+    if (commits) get().patchTab(path, { commits });
   },
 
-  refreshRemotes: async () => {
-    if (!get().repoPath) return;
+  refreshRemotes: async (repoPath) => {
+    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
+    if (!path) return;
     const remotes = await maybe(window.gitApi.remotes());
-    if (remotes) set({ remotes });
+    if (remotes) get().patchTab(path, { remotes });
   },
 
-  refreshPRs: async () => {
-    if (!get().repoPath || !get().ghAvailable) {
-      set({ prs: [] });
+  refreshPRs: async (repoPath) => {
+    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
+    if (!path) return;
+    const tab = get().tabs.find((t) => t.path === path);
+    if (!tab?.ghAvailable) {
+      get().patchTab(path, { prs: [] });
       return;
     }
     const prs = await maybe(window.ghApi.prList("open"));
-    set({ prs: prs ?? [] });
+    get().patchTab(path, { prs: prs ?? [] });
   },
 
-  setGhAvailable: (v) => set({ ghAvailable: v }),
-  setBehindRemote: (v) => set({ behindRemote: v }),
+  setBehindRemote: (path, behindRemote) => get().patchTab(path, { behindRemote }),
 }));
+
+// Convenience selector — returns the active tab's data. Components that used
+// to read from useRepo should now use this.
+export function useActiveTab(): TabData | null {
+  return useRepo((s) => s.tabs[s.activeIdx] ?? null);
+}
+
+// Shallow-equality selector for reading multiple fields off the active tab in
+// one go without tripping React's identity checks.
+export function useActiveTabShallow<T>(picker: (t: TabData | null) => T): T {
+  return useRepo(useShallow((s) => picker(s.tabs[s.activeIdx] ?? null)));
+}
+
+// Grab a specific field off the active tab. Returns undefined when no tab is
+// open, so callers can fall back to sensible defaults (empty arrays, null).
+export function useActive<K extends keyof TabData>(key: K): TabData[K] | undefined {
+  return useRepo((s) => s.tabs[s.activeIdx]?.[key]);
+}

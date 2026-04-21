@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useRepo } from "../../stores/repo";
+import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
@@ -9,7 +9,12 @@ import { buildCreatePrUrl } from "../../lib/pr-url";
 type PullStrategy = "merge" | "rebase" | "ff-only";
 
 export function Toolbar() {
-  const { status, ghAvailable, remotes, refreshAll } = useRepo();
+  const { status, ghAvailable, remotes } = useActiveTabShallow((t) => ({
+    status: t?.status ?? null,
+    ghAvailable: t?.ghAvailable ?? false,
+    remotes: t?.remotes ?? [],
+  }));
+  const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const defaultStrategy = useSettings((s) => s.defaultPullStrategy);
   const [busy, setBusy] = useState<"pull" | "push" | "fetch" | null>(null);

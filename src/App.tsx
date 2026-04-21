@@ -5,19 +5,21 @@ import { StatusBar } from "./components/layout/StatusBar";
 import { Toolbar } from "./components/layout/Toolbar";
 import { Toasts } from "./components/layout/Toasts";
 import { Welcome } from "./components/layout/Welcome";
-import { useRepo } from "./stores/repo";
+import { TabBar } from "./components/layout/TabBar";
+import { useRepo, useActiveTab } from "./stores/repo";
 import { useSettings } from "./stores/settings";
 import { useUI } from "./stores/ui";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 
 export function App() {
-  const { repoPath, refreshAll, refreshStatus, refreshBranches, refreshLog, setBehindRemote } = useRepo();
+  const tabs = useRepo((s) => s.tabs);
+  const activeTab = useActiveTab();
   const theme = useSettings((s) => s.theme);
   const toast = useUI((s) => s.toast);
 
   useKeyboardShortcuts();
 
-  // Wire theme — dark is the default but we respect system + light.
+  // Theme — dark by default but respects system + light.
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "dark") {
@@ -33,66 +35,67 @@ export function App() {
     }
   }, [theme]);
 
-  // Forward IPC repo events into store refreshes. The watcher is debounced in
-  // the main process so we won't flood the renderer here.
+  // Fan-in watcher events from the main process. Each event carries its
+  // repoPath so we only refresh the matching tab rather than everything.
   useEffect(() => {
+    const {
+      refreshStatus,
+      refreshBranches,
+      refreshLog,
+      setBehindRemote,
+    } = useRepo.getState();
     const off1 = window.gitApi.onRepoChanged((e) => {
-      if (e.type === "index" || e.type === "worktree") void refreshStatus();
+      const target = e.repoPath;
+      if (e.type === "index" || e.type === "worktree") void refreshStatus(target);
       if (e.type === "head") {
-        void refreshStatus();
-        void refreshBranches();
-        void refreshLog({ all: true });
+        void refreshStatus(target);
+        void refreshBranches(target);
+        void refreshLog({ all: true }, target);
       }
       if (e.type === "refs") {
-        void refreshBranches();
-        void refreshLog({ all: true });
+        void refreshBranches(target);
+        void refreshLog({ all: true }, target);
       }
     });
     const off2 = window.gitApi.onFetchComplete((e) => {
-      setBehindRemote(e.behind);
+      setBehindRemote(e.repoPath, e.behind);
       if (e.errors) toast("error", `Auto-fetch failed: ${e.errors}`);
     });
     return () => {
       off1();
       off2();
     };
-  }, [refreshStatus, refreshBranches, refreshLog, setBehindRemote, toast]);
+  }, [toast]);
 
-  // Restore the last opened repo (from recent list) on first boot.
+  // Restore the most recent repo as a first tab on cold boot. Subsequent tabs
+  // are user-driven (via the Welcome screen or the + button).
   useEffect(() => {
-    if (repoPath) return;
+    if (tabs.length > 0) return;
     void (async () => {
       const recent = await window.gitApi.recentRepos();
       if (recent.ok && recent.data.length > 0) {
         try {
-          await useRepo.getState().open(recent.data[0]);
+          await useRepo.getState().openRepo(recent.data[0]);
         } catch {
-          // Ignore — user can pick again via Welcome screen.
+          // Ignore — user picks again via Welcome.
         }
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync the window title with current repo + branch.
-  const { status } = useRepo();
+  // Reflect the active tab in the window title.
   useEffect(() => {
-    if (repoPath) {
-      const folder = repoPath.split(/[\\/]/).pop();
-      const branch = status?.branch ? ` — ${status.branch}` : "";
+    if (activeTab) {
+      const folder = activeTab.path.split(/[\\/]/).pop();
+      const branch = activeTab.status?.branch ? ` — ${activeTab.status.branch}` : "";
       document.title = `${folder}${branch} · Git GUI`;
     } else {
       document.title = "Git GUI";
     }
-  }, [repoPath, status?.branch]);
+  }, [activeTab?.path, activeTab?.status?.branch]);
 
-  // Also refresh-all after a fetch completes to keep ahead/behind accurate.
-  useEffect(() => {
-    if (!repoPath) return;
-    void refreshAll();
-  }, [repoPath, refreshAll]);
-
-  if (!repoPath) {
+  if (tabs.length === 0) {
     return (
       <>
         <Welcome />
@@ -103,7 +106,7 @@ export function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col bg-neutral-950 text-neutral-100">
-      <DragRegion />
+      <TabBar />
       <Toolbar />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
@@ -112,17 +115,5 @@ export function App() {
       <StatusBar />
       <Toasts />
     </div>
-  );
-}
-
-// A slim always-drag region for frameless windows (hiddenInset on macOS).
-function DragRegion() {
-  const [isMac] = useState(() => typeof navigator !== "undefined" && /Mac/.test(navigator.platform));
-  if (!isMac) return null;
-  return (
-    <div
-      className="h-6 w-full shrink-0 bg-neutral-950"
-      style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-    />
   );
 }

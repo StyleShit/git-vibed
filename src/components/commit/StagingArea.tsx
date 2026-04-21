@@ -1,4 +1,4 @@
-import { useRepo } from "../../stores/repo";
+import { useRepo, useActive } from "../../stores/repo";
 import type { FileChange } from "@shared/types";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
@@ -9,7 +9,8 @@ interface Props {
 }
 
 export function StagingArea({ selected, onSelect }: Props) {
-  const { status, refreshStatus } = useRepo();
+  const status = useActive("status") ?? null;
+  const refreshStatus = useRepo((s) => s.refreshStatus);
   const toast = useUI((s) => s.toast);
   if (!status) return null;
   const unstaged = [...status.unstaged, ...status.conflicted];

@@ -4,7 +4,7 @@ import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 
 export function Welcome() {
-  const open = useRepo((s) => s.open);
+  const open = useRepo((s) => s.openRepo);
   const toast = useUI((s) => s.toast);
   const [recent, setRecent] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);

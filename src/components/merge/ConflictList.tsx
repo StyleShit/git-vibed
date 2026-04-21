@@ -1,9 +1,10 @@
-import { useRepo } from "../../stores/repo";
+import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 
 export function ConflictList() {
-  const { status, refreshAll } = useRepo();
+  const status = useActive("status") ?? null;
+  const refreshAll = useRepo((s) => s.refreshAll);
   const selected = useUI((s) => s.selectedConflictFile);
   const selectConflictFile = useUI((s) => s.selectConflictFile);
   const toast = useUI((s) => s.toast);

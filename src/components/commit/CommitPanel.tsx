@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { useRepo } from "../../stores/repo";
+import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
 
 export function CommitPanel() {
-  const { status, refreshAll } = useRepo();
+  const status = useActive("status") ?? null;
+  const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const skipHooksDefault = useSettings((s) => s.skipHooksByDefault);
   const setSkipHooksDefault = useSettings((s) => s.setSkipHooksByDefault);

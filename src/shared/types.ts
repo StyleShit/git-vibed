@@ -177,12 +177,15 @@ export interface PRReviewOptions {
   body?: string;
 }
 
-// IPC event payload shapes
+// IPC event payload shapes. Every event includes repoPath so the renderer can
+// route updates to the right tab without guessing.
 export interface RepoChangedEvent {
+  repoPath: string;
   type: "index" | "head" | "refs" | "worktree";
 }
 
 export interface FetchCompleteEvent {
+  repoPath: string;
   behind: number;
   ahead: number;
   errors?: string;

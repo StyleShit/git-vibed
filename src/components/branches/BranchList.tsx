@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useRepo } from "../../stores/repo";
+import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import type { Branch } from "@shared/types";
@@ -8,7 +8,8 @@ import { BranchCreateDialog } from "./BranchCreateDialog";
 import { MergeRebaseDialog } from "./MergeRebaseDialog";
 
 export function BranchList({ filter }: { filter: string }) {
-  const { branches, refreshAll } = useRepo();
+  const branches = useActive("branches") ?? [];
+  const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const [menu, setMenu] = useState<{ x: number; y: number; branch: Branch } | null>(null);
   const [showCreate, setShowCreate] = useState(false);

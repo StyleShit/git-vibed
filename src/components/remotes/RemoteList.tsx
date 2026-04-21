@@ -1,8 +1,8 @@
-import { useRepo } from "../../stores/repo";
+import { useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 
 export function RemoteList({ filter }: { filter: string }) {
-  const remotes = useRepo((s) => s.remotes);
+  const remotes = useActive("remotes") ?? [];
   const setView = useUI((s) => s.setView);
   const filtered = remotes.filter((r) => r.name.toLowerCase().includes(filter.toLowerCase()));
 

@@ -1,10 +1,16 @@
-import { useRepo } from "../../stores/repo";
+import { useActiveTabShallow } from "../../stores/repo";
 import { useEffect, useState } from "react";
 import { unwrap } from "../../lib/ipc";
 import { useUI } from "../../stores/ui";
+import type { PullRequest } from "@shared/types";
 
 export function StatusBar() {
-  const { status, behindRemote, ghAvailable, prs } = useRepo();
+  const { status, behindRemote, ghAvailable, prs } = useActiveTabShallow((t) => ({
+    status: t?.status ?? null,
+    behindRemote: t?.behindRemote ?? 0,
+    ghAvailable: t?.ghAvailable ?? false,
+    prs: t?.prs ?? [],
+  }));
   const toast = useUI((s) => s.toast);
   const [fetching, setFetching] = useState(false);
 
@@ -81,7 +87,7 @@ export function StatusBar() {
 }
 
 function computeCiDot(
-  prs: ReturnType<typeof useRepo.getState>["prs"],
+  prs: PullRequest[],
   branch: string,
 ): { color: string; label: string } | null {
   const myPr = prs.find((p) => p.headRefName === branch);

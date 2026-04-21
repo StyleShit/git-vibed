@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { useRepo } from "../../stores/repo";
+import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { Dialog } from "../ui/Dialog";
 import type { Remote } from "@shared/types";
 
 export function RemotesPanel() {
-  const { remotes, refreshRemotes } = useRepo();
+  const remotes = useActive("remotes") ?? [];
+  const refreshRemotes = useRepo((s) => s.refreshRemotes);
   const toast = useUI((s) => s.toast);
   const [editing, setEditing] = useState<Remote | null>(null);
   const [adding, setAdding] = useState(false);

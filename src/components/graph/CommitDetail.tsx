@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { useRepo } from "../../stores/repo";
+import { useActive } from "../../stores/repo";
 import type { Commit } from "@shared/types";
 
 export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => void }) {
-  const commits = useRepo((s) => s.commits);
+  const commits = useActive("commits") ?? [];
   const [commit, setCommit] = useState<Commit | null>(null);
   const [files, setFiles] = useState<Array<{ path: string; added: number; removed: number }>>([]);
 

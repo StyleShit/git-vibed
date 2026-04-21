@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Dialog } from "../ui/Dialog";
-import { useRepo } from "../../stores/repo";
+import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 
@@ -13,7 +13,8 @@ export function MergeRebaseDialog({
   source: string;
   onClose: () => void;
 }) {
-  const { status, refreshAll } = useRepo();
+  const status = useActive("status") ?? null;
+  const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);
   const [busy, setBusy] = useState(false);

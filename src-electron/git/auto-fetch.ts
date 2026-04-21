@@ -3,6 +3,9 @@ import fs from "node:fs";
 import type { GitExecutor } from "./executor.js";
 import type { FetchCompleteEvent } from "../../src/shared/types.js";
 
+// Per-session payload — RepoSession adds repoPath before forwarding.
+export type AutoFetchEvent = Omit<FetchCompleteEvent, "repoPath">;
+
 // Runs a background `git fetch --all --prune` on an interval. Pauses while a
 // merge or rebase is in progress so it can't clobber in-flight work.
 export class AutoFetcher {
@@ -11,7 +14,7 @@ export class AutoFetcher {
 
   constructor(
     private readonly getExecutor: () => GitExecutor | null,
-    private readonly onComplete: (e: FetchCompleteEvent) => void,
+    private readonly onComplete: (e: AutoFetchEvent) => void,
     private readonly intervalMs: number = 5 * 60 * 1000,
   ) {}
 

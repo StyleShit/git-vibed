@@ -28,6 +28,9 @@ const invoke = <T>(channel: string, ...args: unknown[]): Promise<Result<T>> =>
 
 const gitApi = {
   openRepo: (repoPath: string) => invoke<string>(GIT.OPEN_REPO, repoPath),
+  closeRepo: (repoPath: string) => invoke<string[]>(GIT.CLOSE_REPO, repoPath),
+  setActiveRepo: (repoPath: string) => invoke<string>(GIT.SET_ACTIVE_REPO, repoPath),
+  openRepos: () => invoke<{ paths: string[]; active: string | null }>(GIT.OPEN_REPOS),
   currentRepo: () => invoke<string | null>(GIT.CURRENT_REPO),
   showOpenDialog: () => invoke<string>(GIT.SHOW_OPEN_DIALOG),
   openExternal: (url: string) => invoke<boolean>(GIT.OPEN_EXTERNAL, url),

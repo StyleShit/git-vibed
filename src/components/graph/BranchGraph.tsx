@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRepo } from "../../stores/repo";
+import { useActive } from "../../stores/repo";
 import { layoutCommits, type GraphLayout } from "../../lib/graph-layout";
 import { CommitDetail } from "./CommitDetail";
 import { CommitContextMenu } from "./CommitContextMenu";
@@ -11,7 +11,7 @@ const CIRCLE_R = 4;
 const GRAPH_PADDING_LEFT = 12;
 
 export function BranchGraph() {
-  const commits = useRepo((s) => s.commits);
+  const commits = useActive("commits") ?? [];
   const [selected, setSelected] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; commit: Commit } | null>(null);
 

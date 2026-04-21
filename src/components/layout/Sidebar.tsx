@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useRepo } from "../../stores/repo";
+import { useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { BranchList } from "../branches/BranchList";
 import { PRList } from "../github/PRList";
@@ -8,7 +8,7 @@ import { RemoteList } from "../remotes/RemoteList";
 type Section = "branches" | "remotes" | "prs";
 
 export function Sidebar() {
-  const { ghAvailable } = useRepo();
+  const ghAvailable = useActive("ghAvailable") ?? false;
   const [section, setSection] = useState<Section>("branches");
   const [filter, setFilter] = useState("");
 
@@ -57,7 +57,7 @@ export function Sidebar() {
 }
 
 function SidebarFooter() {
-  const { repoPath } = useRepo();
+  const repoPath = useActive("path") ?? null;
   const setView = useUI((s) => s.setView);
   if (!repoPath) return null;
   const name = repoPath.split(/[\\/]/).pop();
