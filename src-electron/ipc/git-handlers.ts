@@ -52,6 +52,8 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   ipc.handle(GIT.UNSTAGE_PATCH, (_e, patch: string) =>
     wrap(() => exec(repo).applyPatch(patch, true)),
   );
+  ipc.handle(GIT.DISCARD_PATCH, (_e, patch: string) =>
+    wrap(() => exec(repo).discardPatch(patch)),
   ipc.handle(GIT.DISCARD, (_e, files: string[]) => wrap(() => exec(repo).discard(files)));
   ipc.handle(GIT.MARK_RESOLVED, (_e, files: string[]) =>
     wrap(() => exec(repo).markResolved(files)),

@@ -21,7 +21,7 @@ export function Dialog({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/50"
+      className="gui-backdrop-in fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -29,7 +29,7 @@ export function Dialog({
       <div
         ref={ref}
         style={{ width }}
-        className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 shadow-2xl"
+        className="gui-modal-in rounded-lg border border-neutral-800 bg-neutral-900 p-4 shadow-2xl"
       >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold">{title}</h2>

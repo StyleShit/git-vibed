@@ -3,17 +3,25 @@ import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { Dialog } from "../ui/Dialog";
+import { useConfirm } from "../ui/Confirm";
 import type { Remote } from "@shared/types";
 
 export function RemotesPanel() {
   const remotes = useActive("remotes") ?? [];
   const refreshRemotes = useRepo((s) => s.refreshRemotes);
   const toast = useUI((s) => s.toast);
+  const confirmDialog = useConfirm();
   const [editing, setEditing] = useState<Remote | null>(null);
   const [adding, setAdding] = useState(false);
 
   async function remove(name: string) {
-    if (!confirm(`Remove remote "${name}"?`)) return;
+    const ok = await confirmDialog({
+      title: `Remove remote "${name}"?`,
+      message: "The remote configuration is deleted; the repository is unaffected.",
+      confirmLabel: "Remove",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await unwrap(window.gitApi.remoteRemove(name));
       toast("success", `Removed ${name}`);

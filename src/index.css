@@ -36,6 +36,88 @@ button {
   cursor: pointer;
 }
 
+/* Global subtle transitions — all interactive surfaces fade their
+   background/color/opacity over 120ms on hover, focus, and active states
+   so the UI feels responsive without being distracting. Individual
+   components can still opt out by overriding `transition-*` utilities. */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"] {
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease,
+    opacity 120ms ease,
+    filter 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+/* Micro fade+slide keyframe used by menus and popovers so they don't
+   pop instantly when they appear. */
+@keyframes gui-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gui-menu-in {
+  animation: gui-menu-in 110ms ease-out;
+}
+
+@keyframes gui-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.gui-fade-in {
+  animation: gui-fade-in 120ms ease-out;
+}
+
+/* Dedicated keyframe for modal/confirmation dialogs: slightly longer
+   than the menu-in so the lift feels intentional, with a tiny scale so
+   the dialog "rises" toward the user instead of sliding. The backdrop
+   uses its own slower fade so the two stages don't sync-lock. */
+@keyframes gui-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.gui-modal-in {
+  animation: gui-modal-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes gui-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.gui-backdrop-in {
+  animation: gui-backdrop-in 200ms ease-out;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

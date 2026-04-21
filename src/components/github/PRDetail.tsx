@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { useConfirm } from "../ui/Confirm";
 import type { Check, MergeMethod, PullRequest } from "@shared/types";
 
 export function PRDetail() {
   const selected = useUI((s) => s.selectedPR);
   const selectPR = useUI((s) => s.selectPR);
   const toast = useUI((s) => s.toast);
+  const confirmDialog = useConfirm();
   const [pr, setPr] = useState<PullRequest | null>(null);
   const [checks, setChecks] = useState<Check[]>([]);
   const [busy, setBusy] = useState(false);
@@ -33,7 +35,12 @@ export function PRDetail() {
 
   async function merge(method: MergeMethod) {
     if (!pr) return;
-    if (!confirm(`Merge PR #${pr.number} with ${method}?`)) return;
+    const ok = await confirmDialog({
+      title: `Merge PR #${pr.number}`,
+      message: `Merge with ${method}?`,
+      confirmLabel: "Merge",
+    });
+    if (!ok) return;
     setBusy(true);
     setMergeMenu(false);
     try {

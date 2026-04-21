@@ -11,6 +11,7 @@ import {
   acceptAll,
   regionsToString,
 } from "../../lib/merge-engine";
+import { useConfirm } from "../ui/Confirm";
 import type { ConflictRegion } from "@shared/types";
 
 // Three-pane merge: ours | result | theirs
@@ -20,6 +21,7 @@ export function MergeEditor() {
   const file = useUI((s) => s.selectedConflictFile);
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
+  const confirmDialog = useConfirm();
 
   const [ours, setOurs] = useState<string>("");
   const [base, setBase] = useState<string>("");
@@ -138,7 +140,14 @@ export function MergeEditor() {
 
   async function saveAndMarkResolved() {
     if (!file) return;
-    if (unresolved > 0 && !confirm(`${unresolved} conflict(s) remain — mark resolved anyway?`)) return;
+    if (unresolved > 0) {
+      const ok = await confirmDialog({
+        title: "Mark resolved",
+        message: `${unresolved} conflict${unresolved === 1 ? "" : "s"} remain — mark resolved anyway?`,
+        confirmLabel: "Mark resolved",
+      });
+      if (!ok) return;
+    }
     try {
       // Write the current result content back to the working tree. We don't
       // have a direct "write file" IPC — use the host shell by temporarily

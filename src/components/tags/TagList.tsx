@@ -3,12 +3,14 @@ import { useActive, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { TagIcon } from "../ui/Icons";
+import { useConfirm } from "../ui/Confirm";
 import type { Tag } from "@shared/types";
 
 export function TagList({ filter }: { filter: string }) {
   const tags = useActive("tags") ?? [];
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
+  const confirmDialog = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
   const filterLC = filter.trim().toLowerCase();
 
@@ -20,7 +22,13 @@ export function TagList({ filter }: { filter: string }) {
     : tags;
 
   async function del(t: Tag) {
-    if (!confirm(`Delete tag ${t.name}? Use push --tags to sync to remote.`)) return;
+    const ok = await confirmDialog({
+      title: `Delete tag ${t.name}?`,
+      message: "Use push --tags to sync the deletion to remote.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(t.name);
     try {
       await unwrap(window.gitApi.tagDelete(t.name));
@@ -42,7 +50,7 @@ export function TagList({ filter }: { filter: string }) {
       {filtered.map((t) => (
         <div
           key={t.name}
-          className="group flex items-center gap-1.5 rounded px-2 py-1 text-sm hover:bg-neutral-800"
+          className="group flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 text-sm hover:bg-neutral-800"
           title={t.message || t.name}
         >
           <TagIcon

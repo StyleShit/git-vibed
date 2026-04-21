@@ -2,6 +2,7 @@ import { useRepo, useActive } from "../../stores/repo";
 import type { FileChange } from "@shared/types";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { useConfirm } from "../ui/Confirm";
 
 interface Props {
   selected: { path: string; staged: boolean } | null;
@@ -12,6 +13,7 @@ export function StagingArea({ selected, onSelect }: Props) {
   const status = useActive("status") ?? null;
   const refreshStatus = useRepo((s) => s.refreshStatus);
   const toast = useUI((s) => s.toast);
+  const confirmDialog = useConfirm();
   if (!status) return null;
   const unstaged = [...status.unstaged, ...status.conflicted];
 
@@ -34,7 +36,13 @@ export function StagingArea({ selected, onSelect }: Props) {
   }
 
   async function discard(files: string[]) {
-    if (!confirm(`Discard changes to ${files.length} file${files.length === 1 ? "" : "s"}?`)) return;
+    const ok = await confirmDialog({
+      title: "Discard changes",
+      message: `Discard changes to ${files.length} file${files.length === 1 ? "" : "s"}?\nThis can't be undone.`,
+      confirmLabel: "Discard",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await unwrap(window.gitApi.discard(files));
       await refreshStatus();

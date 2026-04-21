@@ -3,6 +3,7 @@ import { useActive, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { WorktreeIcon, LockIcon, BranchIcon } from "../ui/Icons";
+import { useConfirm } from "../ui/Confirm";
 import type { Worktree } from "@shared/types";
 
 export function WorktreeList({ filter }: { filter: string }) {
@@ -10,6 +11,7 @@ export function WorktreeList({ filter }: { filter: string }) {
   const refreshAll = useRepo((s) => s.refreshAll);
   const openRepo = useRepo((s) => s.openRepo);
   const toast = useUI((s) => s.toast);
+  const confirmDialog = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
   const filterLC = filter.trim().toLowerCase();
 
@@ -34,7 +36,13 @@ export function WorktreeList({ filter }: { filter: string }) {
       toast("error", "Can't remove the main worktree");
       return;
     }
-    if (!confirm(`Remove worktree at ${w.path}?`)) return;
+    const ok = await confirmDialog({
+      title: "Remove worktree",
+      message: `Remove worktree at ${w.path}?`,
+      confirmLabel: "Remove",
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(w.path);
     try {
       await unwrap(window.gitApi.worktreeRemove(w.path));
@@ -77,7 +85,7 @@ export function WorktreeList({ filter }: { filter: string }) {
           <div
             key={w.path}
             onDoubleClick={() => open(w)}
-            className="group relative flex items-center gap-1.5 rounded px-2 py-1 text-sm hover:bg-neutral-800"
+            className="group relative flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 text-sm hover:bg-neutral-800"
             title={w.path}
           >
             <WorktreeIcon className="size-3.5 shrink-0 text-neutral-500" />

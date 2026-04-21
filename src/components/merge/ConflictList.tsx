@@ -1,6 +1,7 @@
 import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { useConfirm } from "../ui/Confirm";
 
 export function ConflictList() {
   const status = useActive("status") ?? null;
@@ -8,6 +9,7 @@ export function ConflictList() {
   const selected = useUI((s) => s.selectedConflictFile);
   const selectConflictFile = useUI((s) => s.selectConflictFile);
   const toast = useUI((s) => s.toast);
+  const confirmDialog = useConfirm();
   const conflicts = status?.conflicted ?? [];
 
   async function finish() {
@@ -26,7 +28,13 @@ export function ConflictList() {
   }
 
   async function abort() {
-    if (!confirm("Abort and restore previous state?")) return;
+    const ok = await confirmDialog({
+      title: "Abort",
+      message: "Abort and restore the previous state?",
+      confirmLabel: "Abort",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       if (status?.mergeInProgress) await unwrap(window.gitApi.mergeAbort());
       else if (status?.rebaseInProgress) await unwrap(window.gitApi.rebaseAbort());

@@ -3,6 +3,7 @@ import type { Commit } from "@shared/types";
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { useConfirm } from "../ui/Confirm";
 
 export function CommitContextMenu({
   x,
@@ -18,6 +19,7 @@ export function CommitContextMenu({
   const ref = useRef<HTMLDivElement>(null);
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
+  const confirmDialog = useConfirm();
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -39,8 +41,12 @@ export function CommitContextMenu({
   }
 
   async function revert() {
-    if (!confirm(`Revert ${commit.hash.slice(0, 7)}? This creates a new commit undoing the changes.`))
-      return;
+    const ok = await confirmDialog({
+      title: `Revert ${commit.hash.slice(0, 7)}`,
+      message: "This creates a new commit undoing the changes.",
+      confirmLabel: "Revert",
+    });
+    if (!ok) return;
     try {
       await unwrap(window.gitApi.revert(commit.hash));
       toast("success", `Reverted ${commit.hash.slice(0, 7)}`);
@@ -52,11 +58,16 @@ export function CommitContextMenu({
   }
 
   async function reset(mode: "soft" | "mixed" | "hard") {
-    const warn =
-      mode === "hard"
-        ? "Hard reset will discard all uncommitted changes. Continue?"
-        : `Reset to ${commit.hash.slice(0, 7)} (${mode})?`;
-    if (!confirm(warn)) return;
+    const ok = await confirmDialog({
+      title: `Reset (${mode})`,
+      message:
+        mode === "hard"
+          ? `Reset to ${commit.hash.slice(0, 7)} (hard).\nThis discards all uncommitted changes.`
+          : `Reset to ${commit.hash.slice(0, 7)} (${mode}).`,
+      confirmLabel: `Reset (${mode})`,
+      danger: mode === "hard",
+    });
+    if (!ok) return;
     try {
       await unwrap(window.gitApi.reset(commit.hash, mode));
       toast("success", `Reset (${mode})`);
