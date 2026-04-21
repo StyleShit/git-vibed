@@ -700,12 +700,51 @@ export class GitExecutor {
   // ---- Diff --------------------------------------------------------------
 
   async diff(file: string, opts: { staged?: boolean; commitA?: string; commitB?: string }): Promise<string> {
+    // Untracked files don't show up under plain `git diff` since git hasn't
+    // recorded them yet — the renderer was seeing an empty diff (hence
+    // the "empty + question mark" state). Detect the untracked case via
+    // status and synthesize a diff from /dev/null so every line renders
+    // as an addition, which is what the user expects.
+    if (!opts.staged && !opts.commitA) {
+      try {
+        const s = await this.git.status();
+        if (s.not_added.includes(file)) {
+          return await this.untrackedDiff(file);
+        }
+      } catch {
+        // Fall through to the normal diff path — status was best-effort.
+      }
+    }
     const args = ["diff", "--no-color", "-U3"];
     if (opts.staged) args.push("--cached");
     if (opts.commitA && opts.commitB) args.push(`${opts.commitA}..${opts.commitB}`);
     else if (opts.commitA) args.push(opts.commitA);
     args.push("--", file);
     return await this.git.raw(args);
+  }
+
+  // Render an untracked file as if it were being added. `git diff
+  // --no-index` exits 1 when the inputs differ (always, here), so we
+  // call git directly and treat exit 1 as a normal success.
+  private async untrackedDiff(file: string): Promise<string> {
+    return new Promise<string>((resolve) => {
+      const child = execFile(
+        "git",
+        ["diff", "--no-index", "--no-color", "-U3", "--", "/dev/null", file],
+        { cwd: this.repoPath, maxBuffer: 64 * 1024 * 1024 },
+        (err, stdout) => {
+          // exit 0 = identical (won't happen since source is /dev/null),
+          // exit 1 = differs (our success case), exit >1 = actual error.
+          const code = (err as { code?: number } | null)?.code;
+          if (err && code !== 1) {
+            resolve("");
+            return;
+          }
+          resolve(stdout?.toString() ?? "");
+        },
+      );
+      child.on("error", () => resolve(""));
+    });
   }
 
   async fileAtRef(ref: string, filePath: string): Promise<string> {
