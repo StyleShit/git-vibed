@@ -335,6 +335,25 @@ export class GitExecutor {
     return await this.git.raw(args);
   }
 
+  // Fast-forward a local branch to its tracking upstream without checking it
+  // out. If the branch is currently HEAD we fall back to a normal pull since
+  // refusing to update refs/heads/<head> is a built-in git guard.
+  async pullBranch(localBranch: string): Promise<string> {
+    const status = await this.git.status();
+    if (status.current === localBranch) {
+      return await this.git.raw(["pull", "--ff-only"]);
+    }
+    const upstream = await this.configGet(`branch.${localBranch}.merge`);
+    const remote = await this.configGet(`branch.${localBranch}.remote`);
+    if (!remote || !upstream) {
+      throw new Error(`${localBranch} has no tracking upstream`);
+    }
+    // upstream is refs/heads/<name>; strip to the branch-only form that
+    // refspec syntax expects.
+    const remoteRef = upstream.replace(/^refs\/heads\//, "");
+    return await this.git.raw(["fetch", remote, `${remoteRef}:${localBranch}`]);
+  }
+
   // ---- Diff --------------------------------------------------------------
 
   async diff(file: string, opts: { staged?: boolean; commitA?: string; commitB?: string }): Promise<string> {

@@ -77,6 +77,7 @@ const gitApi = {
   pull: (opts: PullOptions) => invoke<string>(GIT.PULL, opts),
   push: (opts: PushOptions) => invoke<string>(GIT.PUSH, opts),
   fetch: (opts: FetchOptions) => invoke<string>(GIT.FETCH, opts),
+  pullBranch: (branch: string) => invoke<string>(GIT.PULL_BRANCH, branch),
 
   remotes: () => invoke<Remote[]>(GIT.REMOTES),
   remoteAdd: (name: string, url: string) => invoke<void>(GIT.REMOTE_ADD, { name, url }),

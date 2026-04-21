@@ -11,9 +11,10 @@ interface Props {
   onClose: () => void;
   onMerge: (source: string) => void;
   onRebase: (source: string) => void;
+  onRename: (branch: Branch) => void;
 }
 
-export function BranchContextMenu({ x, y, branch, onClose, onMerge, onRebase }: Props) {
+export function BranchContextMenu({ x, y, branch, onClose, onMerge, onRebase, onRename }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
@@ -35,22 +36,6 @@ export function BranchContextMenu({ x, y, branch, onClose, onMerge, onRebase }: 
     try {
       await unwrap(window.gitApi.checkout(branch.name));
       toast("success", `Switched to ${branch.name}`);
-      await refreshAll();
-    } catch (e) {
-      toast("error", e instanceof Error ? e.message : String(e));
-    }
-    onClose();
-  }
-
-  async function rename() {
-    const newName = prompt("New branch name", branch.name);
-    if (!newName || newName === branch.name) {
-      onClose();
-      return;
-    }
-    try {
-      await unwrap(window.gitApi.branchRename(branch.name, newName));
-      toast("success", `Renamed to ${newName}`);
       await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
@@ -88,7 +73,16 @@ export function BranchContextMenu({ x, y, branch, onClose, onMerge, onRebase }: 
         style={{ left: x, top: y }}
       >
         {!branch.isHead && <Item onClick={checkout}>Checkout</Item>}
-        {branch.isLocal && <Item onClick={rename}>Rename…</Item>}
+        {branch.isLocal && (
+          <Item
+            onClick={() => {
+              onRename(branch);
+              onClose();
+            }}
+          >
+            Rename…
+          </Item>
+        )}
         <Item
           onClick={() => {
             onMerge(branch.name);
