@@ -1,0 +1,233 @@
+import { useRef, useState } from "react";
+import { useRepo } from "../../stores/repo";
+import { useUI } from "../../stores/ui";
+import { useSettings } from "../../stores/settings";
+import { unwrap } from "../../lib/ipc";
+import { PRCreateDialog } from "../github/PRCreateDialog";
+import { buildCreatePrUrl } from "../../lib/pr-url";
+
+type PullStrategy = "merge" | "rebase" | "ff-only";
+
+export function Toolbar() {
+  const { status, ghAvailable, remotes, refreshAll } = useRepo();
+  const toast = useUI((s) => s.toast);
+  const defaultStrategy = useSettings((s) => s.defaultPullStrategy);
+  const [busy, setBusy] = useState<"pull" | "push" | "fetch" | null>(null);
+  const [pullMenuOpen, setPullMenuOpen] = useState(false);
+  const [pushMenuOpen, setPushMenuOpen] = useState(false);
+  const [showPrDialog, setShowPrDialog] = useState(false);
+
+  const currentBranch = status?.branch ?? null;
+
+  async function runPull(strategy: PullStrategy) {
+    setPullMenuOpen(false);
+    if (!currentBranch) return;
+    setBusy("pull");
+    try {
+      await unwrap(window.gitApi.pull({ strategy }));
+      toast("success", "Pulled");
+      await refreshAll();
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function runPush(force = false) {
+    setPushMenuOpen(false);
+    if (!currentBranch) return;
+    if (force && !confirm("Force push? This can overwrite remote history.")) return;
+    setBusy("push");
+    try {
+      await unwrap(
+        window.gitApi.push({
+          branch: currentBranch,
+          remote: status?.tracking?.split("/")[0],
+          setUpstream: !status?.tracking,
+          force,
+        }),
+      );
+      toast("success", force ? "Force-pushed" : "Pushed");
+      await refreshAll();
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function runFetch() {
+    setBusy("fetch");
+    try {
+      await unwrap(window.gitApi.fetch({ all: true, prune: true }));
+      toast("success", "Fetched");
+      await refreshAll();
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function openPr() {
+    if (ghAvailable) {
+      setShowPrDialog(true);
+      return;
+    }
+    // Fallback: construct a compare URL for the host.
+    const origin = remotes.find((r) => r.name === "origin") ?? remotes[0];
+    if (!origin) {
+      toast("error", "No remote configured");
+      return;
+    }
+    const base = await deriveDefaultBranch(remotes[0]?.name ?? "origin");
+    const url = buildCreatePrUrl(origin.fetchUrl, base, currentBranch ?? "");
+    if (!url) {
+      toast("error", "Unsupported git host for PR fallback");
+      return;
+    }
+    await window.gitApi.openExternal(url);
+  }
+
+  return (
+    <>
+      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-neutral-800 bg-neutral-925 px-2">
+        <ToolbarButton onClick={runFetch} disabled={!!busy}>
+          {busy === "fetch" ? "…" : "Fetch"}
+        </ToolbarButton>
+        <div className="relative">
+          <SplitButton
+            label={busy === "pull" ? "…" : `Pull${status?.behind ? ` (${status.behind})` : ""}`}
+            disabled={!!busy || !currentBranch}
+            onClick={() => runPull(defaultStrategy)}
+            onToggleMenu={() => setPullMenuOpen((v) => !v)}
+          />
+          {pullMenuOpen && (
+            <DropdownMenu onClose={() => setPullMenuOpen(false)}>
+              <MenuItem onClick={() => runPull("merge")}>Merge (default)</MenuItem>
+              <MenuItem onClick={() => runPull("rebase")}>Rebase</MenuItem>
+              <MenuItem onClick={() => runPull("ff-only")}>Fast-forward only</MenuItem>
+            </DropdownMenu>
+          )}
+        </div>
+        <div className="relative">
+          <SplitButton
+            label={busy === "push" ? "…" : `Push${status?.ahead ? ` (${status.ahead})` : ""}`}
+            disabled={!!busy || !currentBranch}
+            onClick={() => runPush(false)}
+            onToggleMenu={() => setPushMenuOpen((v) => !v)}
+          />
+          {pushMenuOpen && (
+            <DropdownMenu onClose={() => setPushMenuOpen(false)}>
+              <MenuItem onClick={() => runPush(false)}>Push</MenuItem>
+              <MenuItem onClick={() => runPush(true)}>Force push (with lease)</MenuItem>
+            </DropdownMenu>
+          )}
+        </div>
+        <div className="flex-1" />
+        <ToolbarButton onClick={openPr} disabled={!currentBranch || !remotes.length}>
+          Open PR
+        </ToolbarButton>
+      </div>
+      {showPrDialog && <PRCreateDialog onClose={() => setShowPrDialog(false)} />}
+    </>
+  );
+}
+
+async function deriveDefaultBranch(_remote: string): Promise<string> {
+  // Try gh first since it knows the authoritative default branch.
+  const info = await window.ghApi.repoInfo();
+  if (info.ok) return info.data.defaultBranch;
+  // Fallback heuristic.
+  const branches = await window.gitApi.branches();
+  if (branches.ok) {
+    for (const candidate of ["main", "master", "develop"]) {
+      if (branches.data.some((b) => b.name === candidate)) return candidate;
+    }
+  }
+  return "main";
+}
+
+function ToolbarButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded-md px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+function SplitButton({
+  label,
+  onClick,
+  onToggleMenu,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  onToggleMenu: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex rounded-md hover:bg-neutral-800">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className="rounded-l-md px-3 py-1.5 text-sm text-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {label}
+      </button>
+      <button
+        onClick={onToggleMenu}
+        disabled={disabled}
+        className="rounded-r-md px-1.5 py-1.5 text-neutral-400 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        ▾
+      </button>
+    </div>
+  );
+}
+
+function DropdownMenu({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  return (
+    <>
+      <div className="fixed inset-0 z-10" onClick={onClose} />
+      <div
+        ref={ref}
+        className="absolute left-0 top-full z-20 mt-1 min-w-[180px] rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-lg"
+      >
+        {children}
+      </div>
+    </>
+  );
+}
+
+function MenuItem({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="block w-full px-3 py-1.5 text-left text-sm hover:bg-neutral-800"
+    >
+      {children}
+    </button>
+  );
+}
