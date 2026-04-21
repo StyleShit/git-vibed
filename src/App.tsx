@@ -20,6 +20,7 @@ export function App() {
   const sidebarWidth = useSettings((s) => s.sidebarWidth);
   const setSidebarWidth = useSettings((s) => s.setSidebarWidth);
   const toast = useUI((s) => s.toast);
+  const welcomeOpen = useUI((s) => s.welcomeOpen);
 
   useKeyboardShortcuts();
 
@@ -165,6 +166,7 @@ export function App() {
       <StatusBar />
       <Toasts />
       <CommandPalette />
+      {welcomeOpen && <Welcome overlay />}
     </div>
   );
 }

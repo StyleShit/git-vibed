@@ -1,6 +1,5 @@
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 
 // -webkit-app-region doesn't inherit in all cases, so we set it explicitly on
 // every cell. On macOS (hiddenInset title-bar) the OS handles double-click to
@@ -14,19 +13,15 @@ export function TabBar() {
   const activeIdx = useRepo((s) => s.activeIdx);
   const setActive = useRepo((s) => s.setActive);
   const closeTab = useRepo((s) => s.closeTab);
-  const openRepo = useRepo((s) => s.openRepo);
-  const toast = useUI((s) => s.toast);
+  const setWelcomeOpen = useUI((s) => s.setWelcomeOpen);
   const isMac =
     typeof navigator !== "undefined" && /Mac/.test(navigator.platform ?? "");
 
-  async function openNew() {
-    try {
-      const p = await unwrap(window.gitApi.showOpenDialog());
-      await openRepo(p);
-    } catch (e) {
-      if (e instanceof Error && e.message === "User cancelled") return;
-      toast("error", e instanceof Error ? e.message : String(e));
-    }
+  // "+" opens the Welcome overlay rather than the OS folder picker —
+  // that way the user can jump to a recent repo in one click instead
+  // of re-navigating the file system every time.
+  function openNew() {
+    setWelcomeOpen(true);
   }
 
   if (tabs.length === 0) return null;

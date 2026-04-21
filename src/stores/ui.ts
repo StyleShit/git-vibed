@@ -42,6 +42,7 @@ interface UIState {
   selectedConflictFile: string | null;
   prStateFilter: "open" | "closed" | "all";
   commandPaletteOpen: boolean;
+  welcomeOpen: boolean;
   hoveredBranch: string | null;
   graphColumns: GraphColumns;
   toasts: Toast[];
@@ -55,6 +56,7 @@ interface UIState {
   selectConflictFile: (p: string | null) => void;
   setPrStateFilter: (s: UIState["prStateFilter"]) => void;
   setCommandPalette: (open: boolean) => void;
+  setWelcomeOpen: (open: boolean) => void;
   setHoveredBranch: (b: string | null) => void;
   setGraphColumn: (k: keyof GraphColumns, v: boolean) => void;
   toast: (kind: Toast["kind"], text: string) => void;
@@ -80,6 +82,7 @@ export const useUI = create<UIState>((set, get) => ({
   selectedConflictFile: null,
   prStateFilter: "open",
   commandPaletteOpen: false,
+  welcomeOpen: false,
   hoveredBranch: null,
   graphColumns: DEFAULT_COLUMNS,
   toasts: [],
@@ -120,6 +123,7 @@ export const useUI = create<UIState>((set, get) => ({
   selectConflictFile: (selectedConflictFile) => set({ selectedConflictFile }),
   setPrStateFilter: (prStateFilter) => set({ prStateFilter }),
   setCommandPalette: (commandPaletteOpen) => set({ commandPaletteOpen }),
+  setWelcomeOpen: (welcomeOpen) => set({ welcomeOpen }),
   setHoveredBranch: (hoveredBranch) => set({ hoveredBranch }),
   setGraphColumn: (k, v) =>
     set((s) => ({ graphColumns: { ...s.graphColumns, [k]: v } })),
