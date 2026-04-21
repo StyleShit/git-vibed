@@ -133,3 +133,61 @@ textarea,
 .mono {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
+
+/* Merge editor decorations.
+   - Per-line fills in ours/theirs: green for lines this side added vs
+     base (the "change"); no fill for lines unchanged from base.
+   - Result pane pending rows get a soft red band to signal "still
+     needs a decision".
+   - Glyph-margin icons in ours/theirs track the accept/reject/pending
+     state of each conflict line. */
+.merge-line-added-bg {
+  background-color: rgba(16, 185, 129, 0.1);
+}
+.merge-line-neutral-bg {
+  /* Present but transparent so the editor's gutter styling doesn't
+     collapse the decoration into nothing. Keeps per-line layout stable
+     when the user toggles between added/unchanged states. */
+  background-color: transparent;
+}
+.merge-chunk-result-bg {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+.merge-chunk-result-margin {
+  background-color: rgba(239, 68, 68, 0.7);
+  margin-left: 2px;
+  width: 3px;
+}
+
+/* Glyph-margin indicators. Rendered via a ::before pseudo so we control
+   both the icon and the hit-target (the click is handled on the whole
+   margin column by Monaco — we just show the right glyph). */
+.merge-glyph-pending,
+.merge-glyph-accept,
+.merge-glyph-reject {
+  cursor: pointer;
+}
+.merge-glyph-pending::before {
+  content: "·";
+  display: block;
+  text-align: center;
+  color: rgba(156, 163, 175, 0.8);
+  font-size: 18px;
+  line-height: 1;
+}
+.merge-glyph-accept::before {
+  content: "✓";
+  display: block;
+  text-align: center;
+  color: rgb(52, 211, 153);
+  font-size: 12px;
+  font-weight: 700;
+}
+.merge-glyph-reject::before {
+  content: "✕";
+  display: block;
+  text-align: center;
+  color: rgb(248, 113, 113);
+  font-size: 11px;
+  font-weight: 700;
+}
