@@ -69,8 +69,8 @@ export function CommitPanel() {
     function onCommit() {
       if (canCommit) void commit();
     }
-    window.addEventListener("gitgui:commit", onCommit);
-    return () => window.removeEventListener("gitgui:commit", onCommit);
+    window.addEventListener("gitvibed:commit", onCommit);
+    return () => window.removeEventListener("gitvibed:commit", onCommit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canCommit, subject, description, amend, skipHooks]);
 

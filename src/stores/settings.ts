@@ -65,6 +65,6 @@ export const useSettings = create<SettingsState>()(
           collapsedBranchFolders: { ...s.collapsedBranchFolders, [kind]: paths },
         })),
     }),
-    { name: "git-gui-settings" },
+    { name: "git-vibed-settings" },
   ),
 );

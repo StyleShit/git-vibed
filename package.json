@@ -1,8 +1,8 @@
 {
-  "name": "git-gui",
+  "name": "git-vibed",
   "version": "0.1.0",
   "private": true,
-  "description": "Cross-platform Git GUI client built with Electron + React",
+  "description": "Experimental 100% vibe-coded Git GUI client",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
@@ -39,8 +39,8 @@
     "vite-plugin-electron": "^0.29.1"
   },
   "build": {
-    "appId": "com.gitgui.app",
-    "productName": "Git GUI",
+    "appId": "com.gitvibed.app",
+    "productName": "git-vibed",
     "directories": {
       "output": "release"
     },

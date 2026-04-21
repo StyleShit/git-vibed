@@ -110,9 +110,9 @@ export function App() {
     if (activeTab) {
       const folder = activeTab.path.split(/[\\/]/).pop();
       const branch = activeTab.status?.branch ? ` — ${activeTab.status.branch}` : "";
-      document.title = `${folder}${branch} · Git GUI`;
+      document.title = `${folder}${branch} · git-vibed`;
     } else {
-      document.title = "Git GUI";
+      document.title = "git-vibed";
     }
   }, [activeTab?.path, activeTab?.status?.branch]);
 

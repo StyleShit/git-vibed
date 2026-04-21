@@ -23,8 +23,8 @@ import { useConfirm } from "../ui/Confirm";
 
 type PullStrategy = "merge" | "rebase" | "ff-only";
 
-// GitKraken-style toolbar: repo + branch selectors on the left, two button
-// groups in the middle (history + sync / workflow), utilities on the right.
+// Toolbar layout: repo + branch selectors on the left, two button groups
+// in the middle (history + sync / workflow), utilities on the right.
 export function Toolbar() {
   const { status, branches, path } = useActiveTabShallow((t) => ({
     status: t?.status ?? null,
@@ -255,9 +255,9 @@ export function Toolbar() {
   );
 }
 
-// Repo selector — mirrors GitKraken's top-left "repository" pill. Clicking it
-// opens a menu with recent repos + an "open" button. For now we just expose
-// the current repo and let the TabBar do the rest.
+// Repo selector — the top-left "repository" pill. Clicking it opens a menu
+// with recent repos + an "open" button. For now we just expose the current
+// repo and let the TabBar do the rest.
 function RepoSelector({ open, setOpen }: { open: boolean; setOpen: (v: boolean) => void }) {
   const path = useActiveTabShallow((t) => t?.path ?? null);
   const openRepo = useRepo((s) => s.openRepo);

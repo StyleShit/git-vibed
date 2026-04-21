@@ -17,9 +17,9 @@ import {
   SearchIcon,
 } from "../ui/Icons";
 
-// Fuzzy command palette (⌘P / Ctrl+P). Mirrors GitKraken's "Fuzzy Finder" —
-// one search box over commands, branches, commits, tags, stashes, PRs. Ranks
-// results by simple substring+subsequence scoring.
+// Fuzzy command palette (⌘P / Ctrl+P). One search box over commands,
+// branches, commits, tags, stashes, PRs. Ranks results by simple
+// substring + subsequence scoring.
 interface PaletteItem {
   id: string;
   label: string;

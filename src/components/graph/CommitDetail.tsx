@@ -17,9 +17,9 @@ import {
 import { Avatar } from "../ui/Avatar";
 import type { Commit, CommitFile, FileStatus, PullRequest } from "@shared/types";
 
-// GitKraken-style right-hand panel shown when a commit is selected in the
-// graph. Redesign goals: hash badge with copy button, parent links, PR
-// association (when head/base matches), files list with status icons and
+// Right-hand panel shown when a commit is selected in the graph.
+// Surfaces: hash badge with copy button, parent links, PR association
+// (when head/base matches), files list with status icons and
 // add/remove counts, Path/Tree toggle for the file list.
 export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => void }) {
   const commits = useActive("commits") ?? [];
@@ -345,7 +345,7 @@ function FileList({
   }
 
   // Tree view: group by directory. Keep it lightweight — no per-folder
-  // collapsing (matches typical GitKraken behavior for commit file lists).
+  // collapsing — lightweight grouping so long file lists stay scannable.
   const tree = buildFileTree(files);
   return <TreeView tree={tree} depth={0} hash={hash} />;
 }

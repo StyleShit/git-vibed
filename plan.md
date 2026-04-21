@@ -1,6 +1,6 @@
 ---
-name: Git GUI Client
-overview: Build a cross-platform Git GUI client (similar to GitKraken) using Electron + React + TypeScript, wrapping system git and gh CLI, with smart conflict resolution, branch graph visualization, staging management, and GitHub integration.
+name: git-vibed
+overview: Build git-vibed, a cross-platform Git client using Electron + React + TypeScript, wrapping system git and gh CLI, with smart conflict resolution, branch graph visualization, staging management, and GitHub integration.
 todos:
   - id: scaffold
     content: Scaffold Electron + React + Vite + TypeScript + Tailwind project structure
@@ -59,7 +59,7 @@ todos:
 isProject: false
 ---
 
-# Git GUI Client — Full Build Plan
+# git-vibed — Full Build Plan
 
 ## Stack
 
@@ -98,7 +98,7 @@ graph LR
 ## Project Structure
 
 ```
-git-gui/
+git-vibed/
   package.json
   vite.config.ts
   electron-builder.json

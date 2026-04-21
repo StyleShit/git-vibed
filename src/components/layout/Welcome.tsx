@@ -102,7 +102,7 @@ export function Welcome({ overlay = false }: { overlay?: boolean }) {
           <div className="flex size-12 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300">
             <BranchIcon className="size-6" />
           </div>
-          <h1 className="text-xl font-semibold">Git GUI</h1>
+          <h1 className="text-xl font-semibold">git-vibed</h1>
           <p className="text-center text-sm text-neutral-400">
             {overlay
               ? "Open another repository to work on."
