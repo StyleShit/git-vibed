@@ -648,11 +648,12 @@ function RefBadges({ refs, color }: { refs: string[]; color: string }) {
             onMouseLeave={closeSoon}
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.stopPropagation()}
-            // No wrapper background — each ref badge keeps its own pill
-            // so the list reads as a set of floating, clickable chips
-            // over the graph rather than a boxed menu.
-            className="gui-menu-in fixed z-50 flex max-w-[420px] flex-col items-start gap-1"
-            style={{ top: pos.top, left: pos.left }}
+            // Subtle card backdrop behind the floating badges. Inner
+            // padding (px-1.5 py-1) is offset from `left` so the first
+            // pill aligns horizontally with the outer inline badge
+            // that spawned the popover.
+            className="gui-menu-in fixed z-50 flex max-w-[420px] flex-col items-start gap-1 rounded-md border border-neutral-800/80 bg-neutral-900/70 px-1.5 py-1 shadow-lg backdrop-blur-sm"
+            style={{ top: pos.top, left: pos.left - 6 }}
           >
             {ordered.slice(MAX_VISIBLE).map((r) => (
               <RefBadge

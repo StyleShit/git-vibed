@@ -38,8 +38,17 @@ export function StashDetail({ index }: { index: number }) {
     if (!stash) return;
     void (async () => {
       const res = await maybe(window.gitApi.stashShowFiles(index));
-      setFiles(res ?? []);
+      const list = res ?? [];
+      setFiles(list);
+      // Jump straight into the first file's diff so the main view
+      // isn't left on the background graph. Only auto-select when
+      // nothing is focused yet, so navigating between stash files
+      // keeps the user's current pick.
+      if (list.length > 0 && !selectedStashFile) {
+        selectStashFile({ index, path: list[0].path });
+      }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, stash]);
 
   const stats = useMemo(() => {

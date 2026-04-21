@@ -68,7 +68,7 @@ function TrackingBadge({
     () => (behindRemote > 0 ? behindRemote : behind),
     [behindRemote, behind],
   );
-  if (ahead === 0 && behindCount === 0) return <span>in sync</span>;
+  if (ahead === 0 && behindCount === 0) return null;
   return (
     <span>
       {ahead > 0 && <span className="text-emerald-400">↑{ahead}</span>}{" "}

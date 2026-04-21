@@ -27,24 +27,28 @@ export function Welcome({ overlay = false }: { overlay?: boolean }) {
     if (overlay) setWelcomeOpen(false);
   }
 
+  // Close the overlay as soon as a repo is chosen so the loader in the
+  // main panel is visible while `openRepo` finishes its initial refresh.
+  // Running `open` fire-and-forget keeps the UI responsive on huge repos.
+  function launchOpen(p: string) {
+    close();
+    void open(p).catch((e) =>
+      toast("error", e instanceof Error ? e.message : String(e)),
+    );
+  }
+
   async function browse() {
     try {
       const p = await unwrap(window.gitApi.showOpenDialog());
-      await open(p);
-      close();
+      launchOpen(p);
     } catch (e) {
       if (e instanceof Error && e.message === "User cancelled") return;
       toast("error", e instanceof Error ? e.message : String(e));
     }
   }
 
-  async function openPath(p: string) {
-    try {
-      await open(p);
-      close();
-    } catch (e) {
-      toast("error", e instanceof Error ? e.message : String(e));
-    }
+  function openPath(p: string) {
+    launchOpen(p);
   }
 
   function onDrop(e: React.DragEvent) {
