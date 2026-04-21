@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
+import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
 import { useConfirm } from "../ui/Confirm";
 import { CommitPanel } from "../commit/CommitPanel";
@@ -32,7 +33,8 @@ export function ChangesPanel() {
   const confirmDialog = useConfirm();
   const selectWipFile = useUI((s) => s.selectWipFile);
   const selectedWipFile = useUI((s) => s.selectedWipFile);
-  const [viewMode, setViewMode] = useState<ViewMode>("path");
+  const viewMode = useSettings((s) => s.fileListViewMode);
+  const setViewMode = useSettings((s) => s.setFileListViewMode);
   // Multi-selection lives on a per-section basis (staged vs unstaged) —
   // selecting "foo.ts" in Changes shouldn't carry over when you switch
   // focus to the Staged section. `section` keeps the two scopes apart.

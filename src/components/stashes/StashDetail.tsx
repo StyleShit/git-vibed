@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useActive, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
+import { useSettings } from "../../stores/settings";
 import { maybe, unwrap } from "../../lib/ipc";
 import {
   CloseIcon,
@@ -28,7 +29,8 @@ export function StashDetail({ index }: { index: number }) {
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
   const [files, setFiles] = useState<FileDiff[] | null>(null);
-  const [view, setView] = useState<"path" | "tree">("path");
+  const view = useSettings((s) => s.fileListViewMode);
+  const setView = useSettings((s) => s.setFileListViewMode);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {

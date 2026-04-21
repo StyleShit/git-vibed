@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
+import { useSettings } from "../../stores/settings";
 import { maybe } from "../../lib/ipc";
 import {
   CloseIcon,
@@ -28,7 +29,8 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
   const toast = useUI((s) => s.toast);
   const [commit, setCommit] = useState<Commit | null>(null);
   const [files, setFiles] = useState<CommitFile[]>([]);
-  const [view, setView] = useState<"path" | "tree">("path");
+  const view = useSettings((s) => s.fileListViewMode);
+  const setView = useSettings((s) => s.setFileListViewMode);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const wipCount =
     (status?.staged.length ?? 0) +

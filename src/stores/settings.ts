@@ -10,6 +10,9 @@ interface SettingsState {
   defaultPullStrategy: "merge" | "rebase" | "ff-only";
   skipHooksByDefault: boolean;
   diffViewMode: "unified" | "split";
+  // Path vs. tree layout for any file list (staging panel, commit detail,
+  // stash detail). Shared so toggling it in one place sticks everywhere.
+  fileListViewMode: "path" | "tree";
   // Persisted panel widths. Defaults are conservative so the graph column
   // still gets most of the screen on typical 1280-wide displays.
   sidebarWidth: number;
@@ -29,6 +32,7 @@ interface SettingsState {
   setDefaultPullStrategy: (s: SettingsState["defaultPullStrategy"]) => void;
   setSkipHooksByDefault: (v: boolean) => void;
   setDiffViewMode: (m: SettingsState["diffViewMode"]) => void;
+  setFileListViewMode: (m: SettingsState["fileListViewMode"]) => void;
   setSidebarWidth: (w: number) => void;
   setInspectorWidth: (w: number) => void;
   setCollapsedSidebarSections: (ids: SidebarSectionId[]) => void;
@@ -43,6 +47,7 @@ export const useSettings = create<SettingsState>()(
       defaultPullStrategy: "merge",
       skipHooksByDefault: false,
       diffViewMode: "unified",
+      fileListViewMode: "path",
       sidebarWidth: 288,
       inspectorWidth: 352,
       // Match the previous in-memory default so existing users still open
@@ -54,6 +59,7 @@ export const useSettings = create<SettingsState>()(
       setDefaultPullStrategy: (defaultPullStrategy) => set({ defaultPullStrategy }),
       setSkipHooksByDefault: (skipHooksByDefault) => set({ skipHooksByDefault }),
       setDiffViewMode: (diffViewMode) => set({ diffViewMode }),
+      setFileListViewMode: (fileListViewMode) => set({ fileListViewMode }),
       setSidebarWidth: (sidebarWidth) =>
         set({ sidebarWidth: Math.max(200, Math.min(600, sidebarWidth)) }),
       setInspectorWidth: (inspectorWidth) =>
