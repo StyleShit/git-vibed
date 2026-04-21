@@ -2,11 +2,18 @@
 
 A cross-platform Git GUI built with Electron and React. Handles day-to-day Git work — staging, commits, branch management, and conflict resolution — in a fast, keyboard-friendly interface.
 
+![Commit graph](docs/main.png)
+
 ## Features
 
 - **Commit graph** — DAG visualization with branch lanes, commit detail, and context menus for cherry-pick, revert, reset, and tag creation
 - **Staging** — file-level, hunk-level, and line-level staging with a side-by-side Monaco diff viewer
+
+  ![Changes view](docs/changes-view.png)
+
 - **Three-pane merge editor** — per-line accept/reject conflict resolution with syntax highlighting; auto-resolves non-conflicting lines
+
+  ![Conflict resolution](docs/conflict-resolution.png)
 - **Branch management** — create, rename, delete, merge, rebase, push/pull, and open PRs from the branch list or graph
 - **Stash management** — list, apply, drop, and inspect stash contents
 - **GitHub integration** — PR list with CI status, open PR from branch context menu
