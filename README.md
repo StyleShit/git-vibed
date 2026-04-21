@@ -1,4 +1,8 @@
-# Git Vibed
+<div align="center">
+  <img src="public/logo.png" width="64" />
+
+  # Git Vibed
+</div>
 
 A cross-platform Git GUI built with Electron and React. Handles day-to-day Git work — staging, commits, branch management, and conflict resolution — in a fast, keyboard-friendly interface.
 
