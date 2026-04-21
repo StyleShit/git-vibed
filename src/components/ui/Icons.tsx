@@ -163,11 +163,14 @@ export function TerminalIcon(p: IconProps) {
   );
 }
 
+// Classic cog with visible teeth around the rim — more recognizable as a
+// "settings" affordance than the old circle-with-spokes variant.
 export function SettingsIcon(p: IconProps) {
   return (
     <Svg {...p}>
+      <path d="M8 1.5 9 3h1.5l.75 1.3 1.5.4L13 6l1.3 1 -.3 1.5 1 1 -1 1 .3 1.5L13 13l-.25 1.3-1.5.4L10.5 16H9l-1 -1.5 -1 1.5H5.5l-.75-1.3-1.5-.4L3 13l-1.3-1 .3-1.5-1-1 1-1 -.3-1.5L3 6l.25-1.3 1.5-.4L5.5 3H7z" opacity="0" />
+      <path d="M6.5 1.5h3l.3 1.6a5.6 5.6 0 0 1 1.3.75l1.55-.55 1.5 2.6-1.25 1.05a5.6 5.6 0 0 1 0 1.5l1.25 1.05-1.5 2.6-1.55-.55a5.6 5.6 0 0 1-1.3.75l-.3 1.6h-3l-.3-1.6a5.6 5.6 0 0 1-1.3-.75l-1.55.55-1.5-2.6 1.25-1.05a5.6 5.6 0 0 1 0-1.5L2.15 5.1l1.5-2.6 1.55.55a5.6 5.6 0 0 1 1.3-.75z" />
       <circle cx="8" cy="8" r="2" />
-      <path d="M8 1v2M8 13v2M14 8h-2M4 8H2M12.2 3.8l-1.4 1.4M5.2 10.8l-1.4 1.4M12.2 12.2l-1.4-1.4M5.2 5.2 3.8 3.8" />
     </Svg>
   );
 }
@@ -273,17 +276,15 @@ export function MoreIcon(p: IconProps) {
   );
 }
 
-// VSCode-style "collapse all" / "expand all" — a tree outline with an
-// inward/outward chevron indicating the direction. Clearer than two plain
-// chevrons because the tree metaphor connects the icon to folders.
+// Two chevrons meeting/parting in the middle — a compact visual for
+// "expand everything" (arrows pushing outward) and "collapse
+// everything" (arrows pulling inward) that mirrors the macOS
+// UIKit / JetBrains expand-collapse pair.
 export function ExpandAllIcon(p: IconProps) {
   return (
     <Svg {...p}>
-      <path d="M2 3h5" />
-      <path d="M4 3v4h3" />
-      <path d="M4 7v4h3" />
-      <path d="M4 11v2h3" />
-      <path d="m10 8 2 2 2-2" />
+      <path d="m4 6 4-4 4 4" />
+      <path d="m4 10 4 4 4-4" />
     </Svg>
   );
 }
@@ -291,11 +292,8 @@ export function ExpandAllIcon(p: IconProps) {
 export function CollapseAllIcon(p: IconProps) {
   return (
     <Svg {...p}>
-      <path d="M2 3h5" />
-      <path d="M4 3v4h3" />
-      <path d="M4 7v4h3" />
-      <path d="M4 11v2h3" />
-      <path d="m10 10 2-2 2 2" />
+      <path d="m4 3 4 4 4-4" />
+      <path d="m4 13 4-4 4 4" />
     </Svg>
   );
 }
@@ -305,6 +303,19 @@ export function FolderOpenIcon(p: IconProps) {
     <Svg {...p}>
       <path d="M1.5 4.5A1 1 0 0 1 2.5 3.5h3L7 5h6.5a1 1 0 0 1 1 1v1h-12v5a1 1 0 0 1-1 1 1 1 0 0 1-1-1z" />
       <path d="M2.5 13h11l1-6h-12z" />
+    </Svg>
+  );
+}
+
+// Small laptop/computer glyph — used on local-branch ref badges so they're
+// visually distinguishable from remote-branch badges (which show the host
+// avatar) at a glance.
+export function ComputerIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="2" y="3" width="12" height="8" rx="1" />
+      <path d="M1 13h14" />
+      <path d="M6 13v-2M10 13v-2" />
     </Svg>
   );
 }

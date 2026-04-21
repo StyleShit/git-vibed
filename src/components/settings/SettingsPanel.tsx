@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { unwrap } from "../../lib/ipc";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
+import { CloseIcon } from "../ui/Icons";
 import type { ConfigEntry } from "@shared/types";
 
 const COMMON_SETTINGS: Array<{ key: string; label: string; hint?: string }> = [
@@ -15,12 +16,25 @@ const COMMON_SETTINGS: Array<{ key: string; label: string; hint?: string }> = [
 ];
 
 export function SettingsPanel() {
+  const setView = useUI((s) => s.setView);
   return (
-    <div className="flex h-full overflow-auto">
-      <div className="mx-auto w-full max-w-3xl p-6">
-        <h2 className="mb-4 text-lg font-semibold">Settings</h2>
-        <AppSettings />
-        <GitConfigPanel />
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-neutral-800 bg-neutral-925 px-3 text-xs">
+        <span className="text-neutral-500">Settings</span>
+        <button
+          onClick={() => setView("graph")}
+          className="ml-auto rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+          title="Close settings (Esc)"
+        >
+          <CloseIcon className="size-3.5" />
+        </button>
+      </div>
+      <div className="flex-1 overflow-auto">
+        <div className="mx-auto w-full max-w-3xl p-6">
+          <h2 className="mb-4 text-lg font-semibold">Settings</h2>
+          <AppSettings />
+          <GitConfigPanel />
+        </div>
       </div>
     </div>
   );

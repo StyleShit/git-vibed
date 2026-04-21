@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useActiveTabShallow } from "../../stores/repo";
+import { useSettings } from "../../stores/settings";
 import { BranchList, type BranchListHandle } from "../branches/BranchList";
 import { PRList } from "../github/PRList";
 import { RemoteBranchList } from "../branches/RemoteBranchList";
@@ -10,10 +11,12 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CollapseAllIcon,
+  ExpandAllIcon,
   PlusIcon,
   SearchIcon,
 } from "../ui/Icons";
 import { BranchCreateDialog } from "../branches/BranchCreateDialog";
+import { AddRemoteDialog } from "../remotes/AddRemoteDialog";
 
 type SectionId = "local" | "remote" | "stashes" | "worktrees" | "prs" | "tags";
 
@@ -39,13 +42,20 @@ export function Sidebar() {
     }));
 
   const [filter, setFilter] = useState("");
-  // Tags default collapsed to keep the sidebar scannable on repos with
-  // hundreds of tags; everything else opens on load.
-  const [collapsed, setCollapsed] = useState<Set<SectionId>>(() => new Set<SectionId>(["tags"]));
+  // Section collapse state is persisted across launches via the settings
+  // store so the user doesn't have to re-collapse Tags (or anything else)
+  // every time they open the app.
+  const collapsedPersisted = useSettings((s) => s.collapsedSidebarSections);
+  const setCollapsedPersisted = useSettings((s) => s.setCollapsedSidebarSections);
+  const collapsed = useMemo(
+    () => new Set<SectionId>(collapsedPersisted),
+    [collapsedPersisted],
+  );
 
   const localRef = useRef<BranchListHandle>(null);
   const remoteRef = useRef<BranchListHandle>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showAddRemote, setShowAddRemote] = useState(false);
 
   const sections = useMemo<SectionDef[]>(
     () => [
@@ -57,6 +67,12 @@ export function Sidebar() {
         render: (f) => <BranchList ref={localRef} filter={f} kind="local" />,
         actions: (
           <>
+            <HeaderActionButton
+              title="Expand all folders"
+              onClick={() => localRef.current?.expandAll()}
+            >
+              <ExpandAllIcon className="size-3.5" />
+            </HeaderActionButton>
             <HeaderActionButton
               title="Collapse all folders"
               onClick={() => localRef.current?.collapseAll()}
@@ -79,12 +95,26 @@ export function Sidebar() {
         show: true,
         render: (f) => <RemoteBranchList ref={remoteRef} filter={f} />,
         actions: (
-          <HeaderActionButton
-            title="Collapse all folders"
-            onClick={() => remoteRef.current?.collapseAll()}
-          >
-            <CollapseAllIcon className="size-3.5" />
-          </HeaderActionButton>
+          <>
+            <HeaderActionButton
+              title="Expand all folders"
+              onClick={() => remoteRef.current?.expandAll()}
+            >
+              <ExpandAllIcon className="size-3.5" />
+            </HeaderActionButton>
+            <HeaderActionButton
+              title="Collapse all folders"
+              onClick={() => remoteRef.current?.collapseAll()}
+            >
+              <CollapseAllIcon className="size-3.5" />
+            </HeaderActionButton>
+            <HeaderActionButton
+              title="Add remote"
+              onClick={() => setShowAddRemote(true)}
+            >
+              <PlusIcon className="size-3.5" />
+            </HeaderActionButton>
+          </>
         ),
       },
       {
@@ -120,12 +150,10 @@ export function Sidebar() {
   );
 
   function toggle(id: SectionId) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const next = new Set(collapsed);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setCollapsedPersisted([...next]);
   }
 
   return (
@@ -145,6 +173,7 @@ export function Sidebar() {
           ))}
       </div>
       {showCreate && <BranchCreateDialog onClose={() => setShowCreate(false)} />}
+      {showAddRemote && <AddRemoteDialog onClose={() => setShowAddRemote(false)} />}
     </aside>
   );
 }
