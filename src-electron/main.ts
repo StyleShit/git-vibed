@@ -17,6 +17,16 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, "public")
   : RENDERER_DIST;
 
+// Don't crash the app on a stray async error from a dependency (chokidar
+// throwing EMFILE on a huge repo, a gh subprocess failing, etc.). Log and
+// keep going — the renderer already surfaces operation failures as toasts.
+process.on("unhandledRejection", (reason) => {
+  console.warn("[unhandledRejection]", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.warn("[uncaughtException]", err);
+});
+
 let mainWindow: BrowserWindow | null = null;
 let repoManager: RepoManager | null = null;
 

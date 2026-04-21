@@ -7,9 +7,11 @@ import type { RepoChangedEvent } from "../../src/shared/types.js";
 // before it hits the renderer.
 export type WatcherEvent = Pick<RepoChangedEvent, "type">;
 
-// Watches the .git directory and emits coarse-grained change events. We only
-// care about a few specific files — rebroadcasting every FS event from .git
-// would be noisy (e.g. pack writes during a fetch).
+// Watches the .git directory only. We intentionally DO NOT watch the working
+// tree — chokidar walks every descendant to register fs.watch handles, which
+// blows the per-process file-descriptor limit on big repos (EMFILE). The
+// renderer polls `git status` on focus/visibility changes to catch plain
+// work-tree edits that don't touch .git.
 export class RepoWatcher {
   private watcher: FSWatcher | null = null;
   private debounce: NodeJS.Timeout | null = null;
@@ -45,31 +47,12 @@ export class RepoWatcher {
       this.queue(this.classify(filePath));
     });
 
-    // Also watch the working tree for direct edits so staging status stays
-    // in sync. Ignore common noise and the .git dir itself.
-    const workTreeWatcher = chokidar.watch(this.repoPath, {
-      ignoreInitial: true,
-      ignored: (p) => {
-        const rel = path.relative(this.repoPath, p);
-        if (!rel || rel.startsWith("..")) return false;
-        return (
-          rel === ".git" ||
-          rel.startsWith(".git" + path.sep) ||
-          rel.startsWith("node_modules") ||
-          rel.startsWith("dist") ||
-          rel.startsWith("dist-electron") ||
-          rel.startsWith("release")
-        );
-      },
-      awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 75 },
+    // Don't let an FS error tear down the process (EMFILE, EACCES, etc.).
+    // Swallow at this layer — status polling from the renderer still catches
+    // any work-tree drift.
+    this.watcher.on("error", (err) => {
+      console.warn("[watcher]", String(err));
     });
-    workTreeWatcher.on("all", () => this.queue("worktree"));
-
-    // Consolidate both watchers under the same close-on-dispose path.
-    const innerClose = this.watcher.close.bind(this.watcher);
-    this.watcher.close = async () => {
-      await Promise.all([innerClose(), workTreeWatcher.close()]);
-    };
   }
 
   private classify(filePath: string): WatcherEvent["type"] {
@@ -93,7 +76,11 @@ export class RepoWatcher {
 
   async dispose() {
     if (this.debounce) clearTimeout(this.debounce);
-    await this.watcher?.close();
+    try {
+      await this.watcher?.close();
+    } catch (err) {
+      console.warn("[watcher] close failed", String(err));
+    }
     this.watcher = null;
   }
 }

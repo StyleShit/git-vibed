@@ -103,6 +103,30 @@ export function App() {
     }
   }, [activeTab?.path, activeTab?.status?.branch]);
 
+  // Work-tree edits don't touch .git, so the main-process watcher won't fire.
+  // Poll `git status` on focus + periodically while the window is visible so
+  // unstaged changes still show up without the crash-prone chokidar walk over
+  // the whole working tree.
+  useEffect(() => {
+    if (!activeTab) return;
+    const poll = () => {
+      if (document.visibilityState === "visible") {
+        void useRepo.getState().refreshStatus(activeTab.path);
+      }
+    };
+    poll();
+    const onFocus = () => poll();
+    const onVis = () => poll();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    const interval = window.setInterval(poll, 5_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+      clearInterval(interval);
+    };
+  }, [activeTab?.path]);
+
   if (tabs.length === 0) {
     return (
       <>
