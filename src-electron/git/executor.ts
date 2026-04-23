@@ -60,6 +60,18 @@ export class GitExecutor {
     }
   }
 
+  // Snapshot of all remote-tracking refs + tags as "<sha> <refname>" lines.
+  // Used by the auto-fetcher to detect whether a fetch moved anything so the
+  // renderer can skip a needless reload on a no-op tick.
+  async refSnapshot(): Promise<string> {
+    return await this.git.raw([
+      "for-each-ref",
+      "--format=%(objectname) %(refname)",
+      "refs/remotes",
+      "refs/tags",
+    ]);
+  }
+
   async status(): Promise<RepoStatus> {
     const s = await this.git.status();
     const gitDir = path.join(this.repoPath, ".git");
@@ -174,7 +186,6 @@ export class GitExecutor {
     const args: string[] = [];
     if (opts.amend) args.push("--amend");
     if (opts.noVerify) args.push("--no-verify");
-    if (opts.signOff) args.push("--signoff");
     args.push("-m", opts.message);
     // simpleGit's commit() escapes message — but we need multiple flags so
     // use raw() to have full control over argv.
@@ -386,15 +397,18 @@ export class GitExecutor {
   // Using a custom --format so we can parse author date reliably.
   async stashList(): Promise<Stash[]> {
     try {
+      // Include %H so renderer can map a commit hash (e.g. the row the
+      // user right-clicked in the graph) back to the right stash entry
+      // even when the repo has several stashes stacked.
       const raw = await this.git.raw([
         "stash",
         "list",
-        "--format=%gd%x01%ct%x01%gs",
+        "--format=%gd%x01%H%x01%ct%x01%gs",
       ]);
       const out: Stash[] = [];
       for (const line of raw.split("\n")) {
         if (!line) continue;
-        const [ref, ts, msg] = line.split("\x01");
+        const [ref, hash, ts, msg] = line.split("\x01");
         if (!ref) continue;
         const m = /stash@\{(\d+)\}/.exec(ref);
         const index = m ? Number(m[1]) : 0;
@@ -403,6 +417,7 @@ export class GitExecutor {
         out.push({
           index,
           ref,
+          hash: hash ?? "",
           branch: branchMatch?.[1] ?? null,
           message: msg ?? "",
           timestamp: Number(ts) || 0,
@@ -878,6 +893,54 @@ export class GitExecutor {
       );
       child.stdin?.end(stdin);
     });
+  }
+
+  // ---- Undo / Redo ------------------------------------------------------
+  //
+  // Both directions funnel through `git reset --keep`, which is safer
+  // than `--hard` because git bails out rather than clobber uncommitted
+  // local edits. Callers (RepoSession) own the redo stack — the
+  // executor stays stateless per-call.
+
+  async currentHead(): Promise<string> {
+    return (await this.git.raw(["rev-parse", "HEAD"])).trim();
+  }
+
+  // Resolve HEAD@{N} if it exists and differs from the current HEAD. We
+  // return `null` rather than throwing so callers can use this to probe
+  // "is there something to undo?" without catching.
+  async priorReflogSha(): Promise<string | null> {
+    try {
+      const prior = (await this.git.raw(["rev-parse", "HEAD@{1}"])).trim();
+      if (!prior) return null;
+      const current = await this.currentHead();
+      return prior === current ? null : prior;
+    } catch {
+      return null;
+    }
+  }
+
+  // Subject of the most recent HEAD reflog entry ("commit (amend): …",
+  // "merge feature", "rebase (finish): returning to …", etc.). Used as
+  // the hover hint for the Undo button so the user knows what will be
+  // rolled back before clicking.
+  async latestReflogSubject(): Promise<string | null> {
+    try {
+      const raw = await this.git.raw([
+        "reflog",
+        "-1",
+        "--format=%gs",
+        "HEAD",
+      ]);
+      const line = raw.split("\n")[0]?.trim();
+      return line || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async resetKeep(target: string): Promise<void> {
+    await this.git.raw(["reset", "--keep", target]);
   }
 
   // Rarely-needed raw runner — kept private so callers go through typed methods.
