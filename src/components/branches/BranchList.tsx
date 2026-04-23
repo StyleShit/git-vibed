@@ -476,6 +476,7 @@ function FolderRow({
       onContextMenu={onContextMenu}
       className="flex cursor-pointer items-center rounded px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
       style={{ paddingLeft: 8 + depth * 12 }}
+      title={name}
     >
       <span className="mr-1 w-3 text-center text-[10px] text-neutral-500">
         {expanded ? "▾" : "▸"}

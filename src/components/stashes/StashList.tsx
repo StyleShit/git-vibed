@@ -118,7 +118,7 @@ function StashRow({
           {subject || stash.message}
         </div>
         {stash.branch && (
-          <div className="flex items-center gap-1 text-[10px] text-neutral-500">
+          <div className="flex items-center gap-1 text-[10px] text-neutral-500" title={stash.branch}>
             <BranchIcon className="size-2.5" />
             <span className="truncate">{stash.branch}</span>
           </div>

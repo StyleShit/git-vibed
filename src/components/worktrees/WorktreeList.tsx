@@ -100,7 +100,7 @@ export function WorktreeList({ filter }: { filter: string }) {
                 {w.isLocked && <LockIcon className="size-2.5 shrink-0 text-amber-400" />}
               </div>
               {w.branch && (
-                <div className="flex items-center gap-1 text-[10px] text-neutral-500">
+                <div className="flex items-center gap-1 text-[10px] text-neutral-500" title={w.branch}>
                   <BranchIcon className="size-2.5" />
                   <span className="truncate">{w.branch}</span>
                 </div>

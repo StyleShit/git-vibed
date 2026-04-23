@@ -32,10 +32,10 @@ export function UnifiedView({
   hunkActions,
 }: UnifiedProps) {
   return (
-    <pre className="hljs mono whitespace-pre p-0 text-[12px] leading-relaxed">
+    <pre className="hljs mono whitespace-pre overflow-x-auto overflow-y-auto p-0 text-[12px] leading-relaxed">
       {diff.hunks.map((h, hi) => (
         <div key={hi}>
-          <div className="flex items-center justify-between bg-neutral-900 px-2 py-0.5 text-indigo-300">
+          <div className="flex items-center justify-between bg-neutral-900 px-2 py-0.5 text-indigo-300 sticky top-0">
             <span>{h.header}</span>
             {hunkActions && hunkActions.length > 0 && (
               <div className="flex items-center gap-1">
@@ -68,18 +68,16 @@ export function UnifiedView({
                   sel ? "outline outline-1 -outline-offset-1 outline-indigo-500/60" : ""
                 } ${lineBgClass(l.type)}`}
               >
-                <span className="mr-2 inline-block w-10 select-none text-right text-neutral-600">
+                <span className="mr-2 inline-block w-10 select-none text-right text-neutral-600 flex-shrink-0">
                   {l.oldLineNo ?? ""}
                 </span>
-                <span className="mr-2 inline-block w-10 select-none text-right text-neutral-600">
+                <span className="mr-2 inline-block w-10 select-none text-right text-neutral-600 flex-shrink-0">
                   {l.newLineNo ?? ""}
                 </span>
-                <span className="mr-1 inline-block w-3 text-neutral-500">
+                <span className="mr-1 inline-block w-3 text-neutral-500 flex-shrink-0">
                   {l.type === "add" ? "+" : l.type === "del" ? "-" : " "}
                 </span>
                 <span
-                  // hljs output is generated locally against our own diff
-                  // data — no user-provided markup reaches this sink.
                   dangerouslySetInnerHTML={{
                     __html: l.content ? highlightLine(l.content, lang) : "&nbsp;",
                   }}
@@ -212,7 +210,7 @@ export function SplitView({
 
   return (
     <div className="hljs mono flex p-0 text-[12px] leading-relaxed">
-      <div className="w-1/2 overflow-hidden">
+      <div className="w-1/2 overflow-x-auto overflow-y-hidden">
         {pairs.map((p, i) =>
           p.header ? (
             <div key={i} className="bg-neutral-900 px-2 py-0.5 text-indigo-300">
@@ -238,7 +236,7 @@ export function SplitView({
         )}
       </div>
       <div className="w-px bg-neutral-800" />
-      <div className="w-1/2 overflow-hidden">
+      <div className="w-1/2 overflow-x-auto overflow-y-hidden">
         {pairs.map((p, i) =>
           p.header ? (
             <div key={i} className="bg-neutral-900 px-2 py-0.5 text-indigo-300">
