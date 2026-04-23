@@ -8,6 +8,7 @@ import type {
   Remote,
   Stash,
   Tag,
+  UndoState,
   Worktree,
 } from "@shared/types";
 import { unwrap, maybe } from "../lib/ipc";
@@ -30,9 +31,17 @@ export interface TabData {
   stashes: Stash[];
   tags: Tag[];
   worktrees: Worktree[];
+  // Mirror of the main process's per-session HEAD undo/redo state. Kept
+  // alongside status so the toolbar can reflect it without polling a
+  // dedicated channel.
+  undo: UndoState;
   ghAvailable: boolean;
   behindRemote: number;
   loading: boolean;
+  // True while a background auto-fetch tick is running for this repo.
+  // The toolbar Fetch button reads this to show a subtle spinner without
+  // disabling itself (unlike user-initiated fetches which also set `busy`).
+  backgroundFetching: boolean;
 }
 
 const LOG_PAGE_SIZE = 500;
@@ -58,7 +67,9 @@ interface RepoState {
   refreshStashes: (repoPath?: string) => Promise<void>;
   refreshTags: (repoPath?: string) => Promise<void>;
   refreshWorktrees: (repoPath?: string) => Promise<void>;
+  refreshUndoState: (repoPath?: string) => Promise<void>;
   setBehindRemote: (repoPath: string, v: number) => void;
+  setBackgroundFetching: (repoPath: string, v: boolean) => void;
 }
 
 // Guards against concurrent opens of the same path (e.g. React 19 StrictMode
@@ -79,9 +90,11 @@ function emptyTab(path: string): TabData {
     stashes: [],
     tags: [],
     worktrees: [],
+    undo: { canUndo: false, canRedo: false },
     ghAvailable: false,
     behindRemote: 0,
     loading: true,
+    backgroundFetching: false,
   };
 }
 
@@ -199,6 +212,7 @@ export const useRepo = create<RepoState>((set, get) => ({
       get().refreshStashes(path),
       get().refreshTags(path),
       get().refreshWorktrees(path),
+      get().refreshUndoState(path),
     ]);
   },
 
@@ -300,7 +314,16 @@ export const useRepo = create<RepoState>((set, get) => ({
     if (worktrees) get().patchTab(path, { worktrees });
   },
 
+  refreshUndoState: async (repoPath) => {
+    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
+    if (!path) return;
+    const undo = await maybe(window.gitApi.undoState());
+    if (undo) get().patchTab(path, { undo });
+  },
+
   setBehindRemote: (path, behindRemote) => get().patchTab(path, { behindRemote }),
+  setBackgroundFetching: (path, backgroundFetching) =>
+    get().patchTab(path, { backgroundFetching }),
 }));
 
 // Convenience selector — returns the active tab's data. Components that used
