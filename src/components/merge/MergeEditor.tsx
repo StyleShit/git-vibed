@@ -134,34 +134,34 @@ export function MergeEditor() {
   useEffect(() => {
     if (!file) return;
     setLoading(true);
-    setConflictKind(null);
-    setRenameInfo(null);
     historyRef.current = [];
+    // Switching files rapidly can interleave responses from in-flight
+    // requests — the older one lands last and overwrites the newer
+    // file's state. Tag each effect run and only apply its results if
+    // the tag is still current.
+    let cancelled = false;
     void (async () => {
       try {
-        // Detect the conflict kind first, then load whichever index
-        // stages are actually meaningful for it. For a normal text
-        // merge we need all three; for delete/modify and both-added
-        // only two are relevant but we still fetch all three in one
-        // shot — fileAtRef returns "" for missing stages which is
-        // fine for the choice-panel diff views.
+        // Do *all* the fetching before touching state. Setting
+        // conflictKind / regions / ours / theirs piecemeal was causing
+        // a visible flicker on file switch — the panel would briefly
+        // drop back to the three-pane editor (the default when
+        // conflictKind is null) between the reset and the first
+        // successful setState. Computing the final values first and
+        // batching a single atomic update avoids that entirely.
         const kindRes = await unwrap(window.gitApi.conflictKind(file));
-        setConflictKind(kindRes);
         const [o, b, t] = await Promise.all([
           unwrap(window.gitApi.fileAtRef(":2", file)),
           unwrap(window.gitApi.fileAtRef(":1", file)),
           unwrap(window.gitApi.fileAtRef(":3", file)),
         ]);
-        setOurs(o);
-        setBase(b);
-        setTheirs(t);
+        let nextRegions: ConflictRegion[] = [];
+        let nextResult = "";
+        let nextRename: { newPath: string; newContent: string } | null = null;
         if (kindRes === "both-modified") {
-          const r = threeWayMerge(o, b, t);
-          setRegions(r);
-          setResult(regionsToString(r));
+          nextRegions = threeWayMerge(o, b, t);
+          nextResult = regionsToString(nextRegions);
         } else {
-          setRegions([]);
-          setResult("");
           // When one side looks "deleted", it may actually be a rename
           // git's detection didn't auto-fold. Ask git (with -M) whether
           // the "deleting" side in fact moved the file, and if so load
@@ -183,16 +183,27 @@ export function MergeEditor() {
               const newContent = await unwrap(
                 window.gitApi.fileAtRef(ref, newPath),
               );
-              setRenameInfo({ newPath, newContent });
+              nextRename = { newPath, newContent };
             }
           }
         }
+        if (cancelled) return;
+        setConflictKind(kindRes);
+        setOurs(o);
+        setBase(b);
+        setTheirs(t);
+        setRegions(nextRegions);
+        setResult(nextResult);
+        setRenameInfo(nextRename);
       } catch (e) {
-        toast("error", e instanceof Error ? e.message : String(e));
+        if (!cancelled) toast("error", e instanceof Error ? e.message : String(e));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [file, toast]);
 
   // Decorate each pane based on the current regions and decisions.
