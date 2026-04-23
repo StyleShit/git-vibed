@@ -1,14 +1,17 @@
 import { useState } from "react";
-import { useActive, useRepo } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useActiveTab, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { gitStashesOptions } from "../../queries/gitApi";
 import { StashIcon, BranchIcon } from "../ui/Icons";
 import { useConfirm } from "../ui/Confirm";
 import { Tooltip } from "../ui/Tooltip";
 import type { Stash } from "@shared/types";
 
 export function StashList({ filter }: { filter: string }) {
-  const stashes = useActive("stashes") ?? [];
+  const activePath = useActiveTab()?.path;
+  const stashes = useQuery(gitStashesOptions(activePath)).data ?? [];
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();

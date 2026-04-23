@@ -1,21 +1,20 @@
-import { useEffect, useMemo } from "react";
-import { useActive, useRepo } from "../../stores/repo";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
+import { ghAvailableOptions, prsOptions } from "../../queries/gitApi";
 import type { PullRequest } from "@shared/types";
 
 export function PRList({ filter }: { filter: string }) {
-  const prs = useActive("prs") ?? [];
+  const activePath = useActiveTab()?.path;
   const selectPR = useUI((s) => s.selectPR);
   const stateFilter = useSettings((s) => s.prStateFilter);
   const setStateFilter = useSettings((s) => s.setPrStateFilter);
-  const refreshPRs = useRepo((s) => s.refreshPRs);
-
-  // Re-fetch the PR list whenever the state filter changes so the list
-  // reflects the selected bucket rather than the old one.
-  useEffect(() => {
-    void refreshPRs();
-  }, [stateFilter, refreshPRs]);
+  const ghAvailable = useQuery(ghAvailableOptions(activePath)).data ?? false;
+  // The query key includes stateFilter so changing the filter swaps
+  // caches automatically — no manual refetch needed.
+  const prs = useQuery(prsOptions(activePath, stateFilter, ghAvailable)).data ?? [];
 
   const filtered = useMemo(
     () =>

@@ -1,15 +1,24 @@
-import { useActiveTabShallow } from "../../stores/repo";
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useActiveTabShallow } from "../../stores/repo";
+import { useSettings } from "../../stores/settings";
+import {
+  gitStatusOptions,
+  ghAvailableOptions,
+  prsOptions,
+} from "../../queries/gitApi";
 import { BranchIcon } from "../ui/Icons";
 import type { PullRequest } from "@shared/types";
 
 export function StatusBar() {
-  const { status, behindRemote, ghAvailable, prs } = useActiveTabShallow((t) => ({
-    status: t?.status ?? null,
+  const { path, behindRemote } = useActiveTabShallow((t) => ({
+    path: t?.path ?? null,
     behindRemote: t?.behindRemote ?? 0,
-    ghAvailable: t?.ghAvailable ?? false,
-    prs: t?.prs ?? [],
   }));
+  const prStateFilter = useSettings((s) => s.prStateFilter);
+  const status = useQuery(gitStatusOptions(path)).data ?? null;
+  const ghAvailable = useQuery(ghAvailableOptions(path)).data ?? false;
+  const prs = useQuery(prsOptions(path, prStateFilter, ghAvailable)).data ?? [];
 
   if (!status) {
     return (

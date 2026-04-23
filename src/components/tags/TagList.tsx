@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { useActive, useRepo } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useActiveTab, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { gitTagsOptions } from "../../queries/gitApi";
 import { TagIcon } from "../ui/Icons";
 import { useConfirm } from "../ui/Confirm";
 import type { Tag } from "@shared/types";
 
 export function TagList({ filter }: { filter: string }) {
-  const tags = useActive("tags") ?? [];
+  const activePath = useActiveTab()?.path;
+  const tags = useQuery(gitTagsOptions(activePath)).data ?? [];
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();

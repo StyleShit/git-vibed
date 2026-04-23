@@ -1,8 +1,11 @@
-import { useActive } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
+import { gitRemotesOptions } from "../../queries/gitApi";
 
 export function RemoteList({ filter }: { filter: string }) {
-  const remotes = useActive("remotes") ?? [];
+  const activePath = useActiveTab()?.path;
+  const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
   const setView = useUI((s) => s.setView);
   const filtered = remotes.filter((r) => r.name.toLowerCase().includes(filter.toLowerCase()));
 
