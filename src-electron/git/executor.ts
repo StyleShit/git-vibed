@@ -596,57 +596,110 @@ export class GitExecutor {
   // to show "2 modified + 1 added" breakdown plus per-file adds/removes.
   async commitFiles(hash: string): Promise<CommitFile[]> {
     try {
-      // diff-tree gives a predictable per-parent diff — for a merge commit
-      // `git show --name-status` without -m falls back to combined-diff
-      // format (e.g. "RR100\told\tnew" or "MM\tpath"), which our parser
-      // can't read, so the commit detail panel rendered blank file rows
-      // with just a status badge. --first-parent collapses merges to
-      // "diff vs the first parent" (the tip of the target branch before
-      // the merge), which is what users usually mean by "what the merge
-      // brought in". Non-merge commits are unaffected.
-      const raw = await this.git.raw([
-        "diff-tree",
-        "-r",
-        "--no-commit-id",
-        "--name-status",
-        "--numstat",
-        "--find-renames",
-        "-m",
-        "--first-parent",
-        "-z",
-        hash,
-      ]);
-      const parts = raw.split("\0").filter((x) => x.length > 0);
-      // The -z output interleaves name-status then numstat for the same file,
-      // but git emits them in two blocks separated implicitly. Parse by
-      // distinguishing tab-count: name-status lines are "S\tpath" (or
-      // "R<score>\told\tnew"); numstat lines are "add\trem\tpath".
+      // git diff/show silently drops one of --name-status and --numstat
+      // when both are passed — whichever is listed last wins. The
+      // previous combined-parse approach never actually saw numstat
+      // output, and on merges it blew up on combined-diff format
+      // entries (RR100, MM) and rendered blank file rows. Fix both by
+      // running the two commands separately and joining on path.
+      //
+      // Use `<hash>^ <hash>` so merges collapse to "diff vs first
+      // parent" (what the merge brought in from the target branch's
+      // perspective). Root commits have no ^ so fall back to show.
+      let nameStatusRaw: string;
+      let numstatRaw: string;
+      try {
+        [nameStatusRaw, numstatRaw] = await Promise.all([
+          this.git.raw([
+            "diff",
+            "--name-status",
+            "--find-renames",
+            "-z",
+            `${hash}^`,
+            hash,
+          ]),
+          this.git.raw([
+            "diff",
+            "--numstat",
+            "--find-renames",
+            "-z",
+            `${hash}^`,
+            hash,
+          ]),
+        ]);
+      } catch {
+        [nameStatusRaw, numstatRaw] = await Promise.all([
+          this.git.raw([
+            "show",
+            "--format=",
+            "--name-status",
+            "--find-renames",
+            "-z",
+            hash,
+          ]),
+          this.git.raw([
+            "show",
+            "--format=",
+            "--numstat",
+            "--find-renames",
+            "-z",
+            hash,
+          ]),
+        ]);
+      }
+
       const statusByPath = new Map<string, FileStatus>();
       const oldByPath = new Map<string, string>();
-      const numByPath = new Map<string, { a: number; r: number }>();
-      for (let i = 0; i < parts.length; i++) {
-        const p = parts[i];
-        // numstat has a leading digit or '-' (binary), name-status has a letter.
-        if (/^[0-9-]+\t[0-9-]+\t/.test(p)) {
-          const [addS, remS, path] = p.split("\t");
-          const a = addS === "-" ? 0 : Number(addS);
-          const r = remS === "-" ? 0 : Number(remS);
-          numByPath.set(path, { a, r });
-        } else if (/^[ACDMRTU]/.test(p)) {
-          const [code, ...rest] = p.split("\t");
+      // -z name-status format per entry:
+      //   normal: "<letter>\0<path>\0"
+      //   rename: "R<score>\0<old>\0<new>\0"    (all NUL-separated)
+      //   copy:   "C<score>\0<old>\0<new>\0"
+      {
+        const parts = nameStatusRaw.split("\0").filter((x) => x.length > 0);
+        for (let i = 0; i < parts.length; i++) {
+          const code = parts[i];
+          if (!/^[ACDMRTU]/.test(code)) continue;
           const letter = code[0];
           if (letter === "R" || letter === "C") {
-            // rename/copy: next two entries are old, new
             const oldPath = parts[++i];
             const newPath = parts[++i];
-            statusByPath.set(newPath, letter === "R" ? "renamed" : "added");
+            if (!newPath) continue;
+            statusByPath.set(
+              newPath,
+              letter === "R" ? "renamed" : "added",
+            );
             oldByPath.set(newPath, oldPath);
           } else {
-            const path = rest[0] ?? parts[++i];
+            const path = parts[++i];
+            if (!path) continue;
             statusByPath.set(path, letterToStatus(letter));
           }
         }
       }
+
+      const numByPath = new Map<string, { a: number; r: number }>();
+      // -z numstat format per entry:
+      //   normal: "<adds>\t<rems>\t<path>\0"
+      //   rename: "<adds>\t<rems>\t\0<old>\0<new>\0"  (path slot empty)
+      {
+        const parts = numstatRaw.split("\0").filter((x) => x.length > 0);
+        for (let i = 0; i < parts.length; i++) {
+          const p = parts[i];
+          if (!/^[0-9-]+\t[0-9-]+\t/.test(p)) continue;
+          const [addS, remS, path] = p.split("\t");
+          const a = addS === "-" ? 0 : Number(addS);
+          const r = remS === "-" ? 0 : Number(remS);
+          if (path === "" || path === undefined) {
+            // Rename/copy: old + new follow as separate NUL entries.
+            const oldPath = parts[++i];
+            const newPath = parts[++i];
+            if (newPath) numByPath.set(newPath, { a, r });
+          } else {
+            numByPath.set(path, { a, r });
+          }
+        }
+      }
+
       const files: CommitFile[] = [];
       const seen = new Set<string>();
       for (const [path, status] of statusByPath) {
