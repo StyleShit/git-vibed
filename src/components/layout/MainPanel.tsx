@@ -1,6 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { useUI } from "../../stores/ui";
 import { useActive, useActiveTab, useRepo } from "../../stores/repo";
-import { useGitStatus } from "../../queries/gitApi";
+import { gitStatusOptions } from "../../queries/gitApi";
 import { BranchGraph } from "../graph/BranchGraph";
 import { RemotesPanel } from "../remotes/RemotesPanel";
 import { SettingsPanel } from "../settings/SettingsPanel";
@@ -14,7 +15,7 @@ import { unwrap } from "../../lib/ipc";
 export function MainPanel() {
   const view = useUI((s) => s.view);
   const activeTab = useActiveTab();
-  const status = useGitStatus(activeTab?.path).data ?? null;
+  const status = useQuery(gitStatusOptions(activeTab?.path)).data ?? null;
   const loading = useActive("loading") ?? false;
   const commits = useActive("commits") ?? [];
   const mergeInProgress = !!status?.mergeInProgress;

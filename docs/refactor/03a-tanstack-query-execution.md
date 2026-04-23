@@ -26,24 +26,24 @@ No other deps.
 
 All keys start with `["repo", repoPath]` so tab switches are free (each tab is a distinct cache). Hooks live in `src/queries/*.ts`.
 
-**Authoring convention — `queryOptions` factories.** Every hook is backed by a `queryOptions(...)` factory exported alongside the `useX` hook. Example:
+**Authoring convention — `queryOptions` factories, no `useX` wrappers.** Every query is just a `queryOptions(...)` factory that accepts a nullish path and bakes in `enabled: !!path`. No convenience wrapper — call sites use `useQuery` / `useInfiniteQuery` directly:
 
 ```ts
-export function gitStatusOptions(path: string) {
+export function gitStatusOptions(path: string | null | undefined) {
   return queryOptions({
-    queryKey: [...repoKey(path), "status"] as const,
+    queryKey: [...repoKey(path ?? ""), "status"] as const,
     queryFn: () => unwrap(window.gitApi.status()),
+    enabled: !!path,
     staleTime: 0,
     gcTime: 5 * 60_000,
   });
 }
 
-export function useGitStatus(path: string | null | undefined) {
-  return useQuery({ ...gitStatusOptions(path ?? ""), enabled: !!path });
-}
+// Call site:
+const { data } = useQuery(gitStatusOptions(activeTab?.path));
 ```
 
-The factory is the canonical form — it feeds `useQuery`, `useInfiniteQuery`, `prefetchQuery`, `ensureQueryData`, `invalidateQueries({ queryKey })`, and `setQueryData` without re-declaring the key at every call site. Mutations that need to invalidate targeted keys should import the factory and read `.queryKey` off it rather than hand-rolling the array.
+The factory feeds `useQuery`, `useInfiniteQuery`, `prefetchQuery`, `ensureQueryData`, `invalidateQueries({ queryKey: gitStatusOptions(path).queryKey })`, and `setQueryData(gitStatusOptions(path).queryKey, …)` with full type safety and zero string duplication. Mutations in Step D import the factory for their `onSuccess` invalidations.
 
 | Hook | queryKey | queryFn | staleTime | gcTime | Notes |
 | --- | --- | --- | --- | --- | --- |
