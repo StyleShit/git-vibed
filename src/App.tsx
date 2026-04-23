@@ -22,6 +22,7 @@ export function App() {
   const autoFetchIntervalMs = useSettings((s) => s.autoFetchIntervalMs);
   const toast = useUI((s) => s.toast);
   const welcomeOpen = useUI((s) => s.welcomeOpen);
+  const view = useUI((s) => s.view);
 
   useKeyboardShortcuts();
 
@@ -207,13 +208,21 @@ export function App() {
       <TabBar />
       <Toolbar />
       <div className="flex min-h-0 flex-1">
-        <div style={{ width: sidebarWidth }} className="shrink-0">
-          <Sidebar />
-        </div>
-        <ResizeHandle
-          onResize={(dx) => setSidebarWidth(sidebarWidth + dx)}
-          side="right"
-        />
+        {/* Hide the sidebar in the merge view — the ConflictList
+            already occupies that visual slot and drives the flow,
+            so rendering the repo sidebar next to it would just
+            duplicate the "file list on the left" pattern. */}
+        {view !== "merge" && (
+          <>
+            <div style={{ width: sidebarWidth }} className="shrink-0">
+              <Sidebar />
+            </div>
+            <ResizeHandle
+              onResize={(dx) => setSidebarWidth(sidebarWidth + dx)}
+              side="right"
+            />
+          </>
+        )}
         <MainPanel />
       </div>
       <StatusBar />
