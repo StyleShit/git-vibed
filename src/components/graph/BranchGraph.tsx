@@ -1,7 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
 import { createPortal } from "react-dom";
-import { useActive, useRepo } from "../../stores/repo";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useActiveTab, useRepo } from "../../stores/repo";
+import {
+  gitBranchesOptions,
+  gitLogOptions,
+  gitRemotesOptions,
+  gitStatusOptions,
+} from "../../queries/gitApi";
 import { useUI } from "../../stores/ui";
 import type { GraphColumns } from "../../stores/settings";
 import { layoutCommits, type GraphLayout } from "../../lib/graph-layout";
@@ -48,8 +55,13 @@ const DATE_COL_WIDTH = 110;
 const SHA_COL_WIDTH = 70;
 
 export function BranchGraph() {
-  const commits = useActive("commits") ?? [];
-  const status = useActive("status");
+  const activePath = useActiveTab()?.path;
+  const logQuery = useInfiniteQuery(gitLogOptions(activePath));
+  const commits = useMemo(
+    () => logQuery.data?.pages.flat() ?? [],
+    [logQuery.data],
+  );
+  const status = useQuery(gitStatusOptions(activePath)).data;
   const selected = useUI((s) => s.selectedCommit);
   const selectedStash = useUI((s) => s.selectedStash);
   const selectCommit = useUI((s) => s.selectCommit);
@@ -158,6 +170,11 @@ export function BranchGraph() {
               highlighted={highlighted}
               onSelect={selectCommit}
               onContextMenu={(x, y, commit) => setMenu({ x, y, commit })}
+              hasMore={logQuery.hasNextPage}
+              loadingMore={logQuery.isFetchingNextPage}
+              onLoadMore={() => {
+                void logQuery.fetchNextPage();
+              }}
             />
           </>
         )}
@@ -329,6 +346,9 @@ function GraphBody({
   highlighted,
   onSelect,
   onContextMenu,
+  hasMore,
+  loadingMore,
+  onLoadMore,
 }: {
   layout: GraphLayout;
   graphColumnWidth: number;
@@ -337,14 +357,14 @@ function GraphBody({
   highlighted: Set<string> | null;
   onSelect: (hash: string) => void;
   onContextMenu: (x: number, y: number, commit: Commit) => void;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
   const rafId = useRef<number | null>(null);
-  const loadMoreCommits = useRepo((s) => s.loadMoreCommits);
-  const commitsExhausted = useActive("commitsExhausted") ?? false;
-  const loadingMore = useActive("loadingMoreCommits") ?? false;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -360,8 +380,8 @@ function GraphBody({
         setScrollTop(el.scrollTop);
       });
       const remaining = el.scrollHeight - (el.scrollTop + el.clientHeight);
-      if (remaining < ROW_HEIGHT * 20 && !commitsExhausted && !loadingMore) {
-        void loadMoreCommits();
+      if (remaining < ROW_HEIGHT * 20 && hasMore && !loadingMore) {
+        onLoadMore();
       }
     };
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -373,7 +393,7 @@ function GraphBody({
       el.removeEventListener("scroll", onScroll);
       ro.disconnect();
     };
-  }, [loadMoreCommits, commitsExhausted, loadingMore]);
+  }, [onLoadMore, hasMore, loadingMore]);
 
   const OVERSCAN = 20;
   const firstRow = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
@@ -456,7 +476,7 @@ function GraphBody({
             }}
           />
         ))}
-        {!commitsExhausted && (
+        {hasMore && (
           <div
             className="absolute flex items-center justify-center text-xs text-neutral-500"
             style={{ top: totalHeight, left: 0, right: 0, height: 40 }}
@@ -590,7 +610,8 @@ function RefBadges({ refs, color }: { refs: string[]; color: string }) {
   // that sits a few pixels below it without the hover state collapsing
   // mid-movement. Re-entering (cell or popover) cancels the pending close.
   const closeTimer = useRef<number | null>(null);
-  const remotes = useActive("remotes") ?? [];
+  const activePath = useActiveTab()?.path;
+  const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
 
   // "HEAD" is redundant with the accompanying branch name on the same
   // commit and only clutters the list. Sort so branches (local first,
@@ -720,8 +741,9 @@ function RefBadge({
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
   const confirmDialog = useConfirm();
-  const branches = useActive("branches") ?? [];
-  const remotes = useActive("remotes") ?? [];
+  const activePath = useActiveTab()?.path;
+  const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
+  const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
 
   // After parser normalization, refs come in short form:
   //   tag:<name>          — tag
