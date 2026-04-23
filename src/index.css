@@ -142,7 +142,10 @@ textarea,
    - Glyph-margin icons in ours/theirs track the accept/reject/pending
      state of each conflict line. */
 .merge-line-added-bg {
-  background-color: rgba(16, 185, 129, 0.1);
+  /* Used by "ok" (auto-merged) regions where one side introduced
+     content that cleanly lands in the result — tint the source
+     side's pane green so the user can see what contributed. */
+  background-color: rgba(16, 185, 129, 0.18);
 }
 .merge-line-neutral-bg {
   /* Present but transparent so the editor's gutter styling doesn't
@@ -150,8 +153,25 @@ textarea,
      when the user toggles between added/unchanged states. */
   background-color: transparent;
 }
-.merge-chunk-result-bg {
+/* Conflict chunks: tint by SIDE (red for ours, green for theirs)
+   on every line so the block reads as "the ours take vs the
+   theirs take." Lines that actually diverge from base get the
+   *-strong-bg variant for extra contrast against context lines
+   the two sides happen to share. */
+.merge-line-conflict-ours-bg {
   background-color: rgba(239, 68, 68, 0.1);
+}
+.merge-line-conflict-ours-strong-bg {
+  background-color: rgba(239, 68, 68, 0.22);
+}
+.merge-line-conflict-theirs-bg {
+  background-color: rgba(16, 185, 129, 0.1);
+}
+.merge-line-conflict-theirs-strong-bg {
+  background-color: rgba(16, 185, 129, 0.22);
+}
+.merge-chunk-result-bg {
+  background-color: rgba(239, 68, 68, 0.15);
 }
 .merge-chunk-result-margin {
   background-color: rgba(239, 68, 68, 0.7);

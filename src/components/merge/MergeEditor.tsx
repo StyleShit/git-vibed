@@ -256,9 +256,16 @@ export function MergeEditor() {
       const oMarks = lineMarks.oursMarks[idx] ?? [];
       const tMarks = lineMarks.theirsMarks[idx] ?? [];
 
+      // Conflict chunks read as "ours take vs theirs take": every
+      // line on the ours side gets a red tint, every line on the
+      // theirs side gets a green tint. Lines that also diverge from
+      // base ("added" per the per-line diff) bump up to a stronger
+      // shade so the user can still tell what actually changed.
       for (let i = 0; i < ours.length; i++) {
         const bg =
-          oMarks[i] === "added" ? "merge-line-added-bg" : "merge-line-neutral-bg";
+          oMarks[i] === "added"
+            ? "merge-line-conflict-ours-strong-bg"
+            : "merge-line-conflict-ours-bg";
         const glyph = glyphClassFor(oDec[i] ?? null);
         oursDecos.push({
           range: new monaco.Range(oursLine + i, 1, oursLine + i, 1),
@@ -272,7 +279,9 @@ export function MergeEditor() {
 
       for (let i = 0; i < theirs.length; i++) {
         const bg =
-          tMarks[i] === "added" ? "merge-line-added-bg" : "merge-line-neutral-bg";
+          tMarks[i] === "added"
+            ? "merge-line-conflict-theirs-strong-bg"
+            : "merge-line-conflict-theirs-bg";
         const glyph = glyphClassFor(tDec[i] ?? null);
         theirsDecos.push({
           range: new monaco.Range(theirsLine + i, 1, theirsLine + i, 1),
