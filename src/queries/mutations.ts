@@ -3,6 +3,7 @@ import { unwrap } from "../lib/ipc";
 import { queryClient } from "./client";
 import {
   gitLogOptions,
+  gitRemotesOptions,
   gitStashesOptions,
   gitStatusOptions,
   gitTagsOptions,
@@ -181,5 +182,51 @@ export function tagDeleteMutation(
     },
     onSuccess: () =>
       invalidate([gitTagsOptions(path).queryKey, gitLogOptions(path).queryKey]),
+  };
+}
+
+// --- Remotes -------------------------------------------------------------
+
+interface RemoteAddInput {
+  name: string;
+  url: string;
+}
+
+interface RemoteSetUrlInput {
+  name: string;
+  url: string;
+  push?: boolean;
+}
+
+export function remoteAddMutation(
+  path: string,
+): UseMutationOptions<void, Error, RemoteAddInput> {
+  return {
+    mutationFn: async ({ name, url }) => {
+      await unwrap(window.gitApi.remoteAdd(name, url));
+    },
+    onSuccess: () => invalidate([gitRemotesOptions(path).queryKey]),
+  };
+}
+
+export function remoteRemoveMutation(
+  path: string,
+): UseMutationOptions<void, Error, string> {
+  return {
+    mutationFn: async (name) => {
+      await unwrap(window.gitApi.remoteRemove(name));
+    },
+    onSuccess: () => invalidate([gitRemotesOptions(path).queryKey]),
+  };
+}
+
+export function remoteSetUrlMutation(
+  path: string,
+): UseMutationOptions<void, Error, RemoteSetUrlInput> {
+  return {
+    mutationFn: async ({ name, url, push }) => {
+      await unwrap(window.gitApi.remoteSetUrl(name, url, push));
+    },
+    onSuccess: () => invalidate([gitRemotesOptions(path).queryKey]),
   };
 }

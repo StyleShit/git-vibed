@@ -1,9 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 import { gitRemotesOptions } from "../../queries/gitApi";
+import {
+  remoteAddMutation,
+  remoteRemoveMutation,
+  remoteSetUrlMutation,
+} from "../../queries/mutations";
 import { Dialog } from "../ui/Dialog";
 import { useConfirm } from "../ui/Confirm";
 import type { Remote } from "@shared/types";
@@ -11,7 +15,7 @@ import type { Remote } from "@shared/types";
 export function RemotesPanel() {
   const activePath = useActiveTab()?.path;
   const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
-  const refreshRemotes = useRepo((s) => s.refreshRemotes);
+  const remoteRemoveMut = useMutation(remoteRemoveMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
   const [editing, setEditing] = useState<Remote | null>(null);
@@ -26,9 +30,8 @@ export function RemotesPanel() {
     });
     if (!ok) return;
     try {
-      await unwrap(window.gitApi.remoteRemove(name));
+      await remoteRemoveMut.mutateAsync(name);
       toast("success", `Removed ${name}`);
-      await refreshRemotes();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -93,18 +96,18 @@ export function RemotesPanel() {
 }
 
 function AddDialog({ onClose }: { onClose: () => void }) {
+  const activePath = useActiveTab()?.path;
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const toast = useUI((s) => s.toast);
-  const refreshRemotes = useRepo((s) => s.refreshRemotes);
+  const remoteAddMut = useMutation(remoteAddMutation(activePath ?? ""));
 
   async function save() {
     setBusy(true);
     try {
-      await unwrap(window.gitApi.remoteAdd(name.trim(), url.trim()));
+      await remoteAddMut.mutateAsync({ name: name.trim(), url: url.trim() });
       toast("success", `Added ${name.trim()}`);
-      await refreshRemotes();
       onClose();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
@@ -146,23 +149,23 @@ function AddDialog({ onClose }: { onClose: () => void }) {
 }
 
 function EditDialog({ remote, onClose }: { remote: Remote; onClose: () => void }) {
+  const activePath = useActiveTab()?.path;
   const [fetchUrl, setFetchUrl] = useState(remote.fetchUrl);
   const [pushUrl, setPushUrl] = useState(remote.pushUrl);
   const [busy, setBusy] = useState(false);
   const toast = useUI((s) => s.toast);
-  const refreshRemotes = useRepo((s) => s.refreshRemotes);
+  const remoteSetUrlMut = useMutation(remoteSetUrlMutation(activePath ?? ""));
 
   async function save() {
     setBusy(true);
     try {
       if (fetchUrl !== remote.fetchUrl) {
-        await unwrap(window.gitApi.remoteSetUrl(remote.name, fetchUrl, false));
+        await remoteSetUrlMut.mutateAsync({ name: remote.name, url: fetchUrl, push: false });
       }
       if (pushUrl !== remote.pushUrl) {
-        await unwrap(window.gitApi.remoteSetUrl(remote.name, pushUrl, true));
+        await remoteSetUrlMut.mutateAsync({ name: remote.name, url: pushUrl, push: true });
       }
       toast("success", "Saved");
-      await refreshRemotes();
       onClose();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));

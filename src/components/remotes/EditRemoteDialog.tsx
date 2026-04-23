@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
-import { unwrap } from "../../lib/ipc";
-import { useRepo } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
+import { remoteSetUrlMutation } from "../../queries/mutations";
 
 // Edit the fetch/push URLs of an existing remote. Blank push URL is
 // treated as "reuse the fetch URL" — matching `git remote -v` behavior.
@@ -19,8 +20,9 @@ export function EditRemoteDialog({
   initialPushUrl: string;
   onClose: () => void;
 }) {
+  const activePath = useActiveTab()?.path;
   const toast = useUI((s) => s.toast);
-  const refreshRemotes = useRepo((s) => s.refreshRemotes);
+  const remoteSetUrlMut = useMutation(remoteSetUrlMutation(activePath ?? ""));
   const [fetchUrl, setFetchUrl] = useState(initialFetchUrl);
   const [pushUrl, setPushUrl] = useState(
     initialPushUrl === initialFetchUrl ? "" : initialPushUrl,
@@ -36,13 +38,12 @@ export function EditRemoteDialog({
     setBusy(true);
     try {
       if (nextFetch !== initialFetchUrl) {
-        await unwrap(window.gitApi.remoteSetUrl(name, nextFetch, false));
+        await remoteSetUrlMut.mutateAsync({ name, url: nextFetch, push: false });
       }
       if (nextPush !== initialPushUrl) {
-        await unwrap(window.gitApi.remoteSetUrl(name, nextPush, true));
+        await remoteSetUrlMut.mutateAsync({ name, url: nextPush, push: true });
       }
       toast("success", `Updated URLs for ${name}`);
-      await refreshRemotes();
       onClose();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
