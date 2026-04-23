@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useActiveTabShallow, useRepo } from "../../stores/repo";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useActiveTab, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { useSettings } from "../../stores/settings";
+import {
+  ghAvailableOptions,
+  gitBranchesOptions,
+  gitLogOptions,
+  gitStashesOptions,
+  gitStatusOptions,
+  gitTagsOptions,
+  gitWorktreesOptions,
+  prsOptions,
+} from "../../queries/gitApi";
 import {
   BranchIcon,
   CommitIcon,
@@ -35,17 +46,21 @@ export function CommandPalette() {
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);
   const selectCommit = useUI((s) => s.selectCommit);
-  const { branches, commits, stashes, tags, prs, worktrees, status } = useActiveTabShallow(
-    (t) => ({
-      branches: t?.branches ?? [],
-      commits: t?.commits ?? [],
-      stashes: t?.stashes ?? [],
-      tags: t?.tags ?? [],
-      prs: t?.prs ?? [],
-      worktrees: t?.worktrees ?? [],
-      status: t?.status ?? null,
-    }),
+  const activePath = useActiveTab()?.path;
+  const prStateFilter = useSettings((s) => s.prStateFilter);
+  const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
+  const logQuery = useInfiniteQuery(gitLogOptions(activePath));
+  const commits = useMemo(
+    () => logQuery.data?.pages.flat() ?? [],
+    [logQuery.data],
   );
+  const stashes = useQuery(gitStashesOptions(activePath)).data ?? [];
+  const tags = useQuery(gitTagsOptions(activePath)).data ?? [];
+  const worktrees = useQuery(gitWorktreesOptions(activePath)).data ?? [];
+  const status = useQuery(gitStatusOptions(activePath)).data ?? null;
+  const ghAvailable = useQuery(ghAvailableOptions(activePath)).data ?? false;
+  const prs =
+    useQuery(prsOptions(activePath, prStateFilter, ghAvailable)).data ?? [];
   const refreshAll = useRepo((s) => s.refreshAll);
   const openRepo = useRepo((s) => s.openRepo);
   const pullStrategy = useSettings((s) => s.defaultPullStrategy);

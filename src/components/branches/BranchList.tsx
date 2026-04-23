@@ -1,9 +1,14 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
-import { useRepo, useActive } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
+import {
+  gitBranchesOptions,
+  gitRemotesOptions,
+} from "../../queries/gitApi";
 import type { Branch } from "@shared/types";
 import { BranchContextMenu } from "./BranchContextMenu";
 import { BranchCreateDialog } from "./BranchCreateDialog";
@@ -41,8 +46,9 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
   { filter, kind = "local" },
   ref,
 ) {
-  const branches = useActive("branches") ?? [];
-  const remotes = useActive("remotes") ?? [];
+  const activePath = useActiveTab()?.path;
+  const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
+  const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);
