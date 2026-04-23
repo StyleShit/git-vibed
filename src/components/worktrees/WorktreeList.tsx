@@ -1,9 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useActiveTab, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 import { gitWorktreesOptions } from "../../queries/gitApi";
+import {
+  worktreeLockMutation,
+  worktreeRemoveMutation,
+  worktreeUnlockMutation,
+} from "../../queries/mutations";
 import { WorktreeIcon, LockIcon, BranchIcon } from "../ui/Icons";
 import { useConfirm } from "../ui/Confirm";
 import type { Worktree } from "@shared/types";
@@ -11,7 +15,9 @@ import type { Worktree } from "@shared/types";
 export function WorktreeList({ filter }: { filter: string }) {
   const activePath = useActiveTab()?.path;
   const worktrees = useQuery(gitWorktreesOptions(activePath)).data ?? [];
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const worktreeRemoveMut = useMutation(worktreeRemoveMutation(activePath ?? ""));
+  const worktreeLockMut = useMutation(worktreeLockMutation(activePath ?? ""));
+  const worktreeUnlockMut = useMutation(worktreeUnlockMutation(activePath ?? ""));
   const openRepo = useRepo((s) => s.openRepo);
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
@@ -48,9 +54,8 @@ export function WorktreeList({ filter }: { filter: string }) {
     if (!ok) return;
     setBusy(w.path);
     try {
-      await unwrap(window.gitApi.worktreeRemove(w.path));
+      await worktreeRemoveMut.mutateAsync({ path: w.path });
       toast("success", "Removed worktree");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {
@@ -62,13 +67,12 @@ export function WorktreeList({ filter }: { filter: string }) {
     setBusy(w.path);
     try {
       if (w.isLocked) {
-        await unwrap(window.gitApi.worktreeUnlock(w.path));
+        await worktreeUnlockMut.mutateAsync(w.path);
         toast("success", "Unlocked");
       } else {
-        await unwrap(window.gitApi.worktreeLock(w.path));
+        await worktreeLockMut.mutateAsync({ path: w.path });
         toast("success", "Locked");
       }
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {

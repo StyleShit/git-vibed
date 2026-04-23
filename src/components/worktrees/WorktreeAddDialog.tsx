@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { gitBranchesOptions } from "../../queries/gitApi";
+import { worktreeAddMutation } from "../../queries/mutations";
 
 // Create a new git worktree at a user-picked filesystem path. Two modes:
 //   - checkout an existing branch (local or remote)
@@ -17,7 +18,7 @@ export function WorktreeAddDialog({ onClose }: { onClose: () => void }) {
   const activeTab = useActiveTab();
   const repoPath = activeTab?.path ?? null;
   const branches = useQuery(gitBranchesOptions(repoPath)).data ?? [];
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const worktreeAddMut = useMutation(worktreeAddMutation(repoPath ?? ""));
   const toast = useUI((s) => s.toast);
 
   const [mode, setMode] = useState<"existing" | "new">("existing");
@@ -57,7 +58,11 @@ export function WorktreeAddDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     try {
       if (mode === "existing") {
-        await unwrap(window.gitApi.worktreeAdd(effectivePath, existingBranch, false));
+        await worktreeAddMut.mutateAsync({
+          path: effectivePath,
+          branch: existingBranch,
+          createBranch: false,
+        });
       } else {
         const name = newBranchName.trim();
         if (!name) {
@@ -71,10 +76,13 @@ export function WorktreeAddDialog({ onClose }: { onClose: () => void }) {
         // versions and keeps the rollback story simple (if the
         // worktree add fails we still have a clean new branch).
         await unwrap(window.gitApi.branchCreate(name, newBranchBase));
-        await unwrap(window.gitApi.worktreeAdd(effectivePath, name, false));
+        await worktreeAddMut.mutateAsync({
+          path: effectivePath,
+          branch: name,
+          createBranch: false,
+        });
       }
       toast("success", "Added worktree");
-      await refreshAll();
       onClose();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));

@@ -2,11 +2,13 @@ import { type UseMutationOptions } from "@tanstack/react-query";
 import { unwrap } from "../lib/ipc";
 import { queryClient } from "./client";
 import {
+  gitBranchesOptions,
   gitLogOptions,
   gitRemotesOptions,
   gitStashesOptions,
   gitStatusOptions,
   gitTagsOptions,
+  gitWorktreesOptions,
 } from "./gitApi";
 
 // Invalidate a list of query keys in one go. Helper because every
@@ -228,5 +230,71 @@ export function remoteSetUrlMutation(
       await unwrap(window.gitApi.remoteSetUrl(name, url, push));
     },
     onSuccess: () => invalidate([gitRemotesOptions(path).queryKey]),
+  };
+}
+
+// --- Worktrees -----------------------------------------------------------
+
+interface WorktreeAddInput {
+  path: string;
+  branch: string;
+  createBranch?: boolean;
+}
+
+interface WorktreeRemoveInput {
+  path: string;
+  force?: boolean;
+}
+
+interface WorktreeLockInput {
+  path: string;
+  reason?: string;
+}
+
+export function worktreeAddMutation(
+  path: string,
+): UseMutationOptions<void, Error, WorktreeAddInput> {
+  return {
+    mutationFn: async ({ path: wtPath, branch, createBranch }) => {
+      await unwrap(window.gitApi.worktreeAdd(wtPath, branch, createBranch));
+    },
+    onSuccess: () =>
+      invalidate([
+        gitWorktreesOptions(path).queryKey,
+        gitBranchesOptions(path).queryKey,
+      ]),
+  };
+}
+
+export function worktreeRemoveMutation(
+  path: string,
+): UseMutationOptions<void, Error, WorktreeRemoveInput> {
+  return {
+    mutationFn: async ({ path: wtPath, force }) => {
+      await unwrap(window.gitApi.worktreeRemove(wtPath, force));
+    },
+    onSuccess: () => invalidate([gitWorktreesOptions(path).queryKey]),
+  };
+}
+
+export function worktreeLockMutation(
+  path: string,
+): UseMutationOptions<void, Error, WorktreeLockInput> {
+  return {
+    mutationFn: async ({ path: wtPath, reason }) => {
+      await unwrap(window.gitApi.worktreeLock(wtPath, reason));
+    },
+    onSuccess: () => invalidate([gitWorktreesOptions(path).queryKey]),
+  };
+}
+
+export function worktreeUnlockMutation(
+  path: string,
+): UseMutationOptions<void, Error, string> {
+  return {
+    mutationFn: async (wtPath) => {
+      await unwrap(window.gitApi.worktreeUnlock(wtPath));
+    },
+    onSuccess: () => invalidate([gitWorktreesOptions(path).queryKey]),
   };
 }
