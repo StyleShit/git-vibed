@@ -103,10 +103,15 @@ export function CommitIcon(p: IconProps) {
 }
 
 export function FetchIcon(p: IconProps) {
+  // Circular-arrow "refresh" glyph — two quarter arcs chasing each other
+  // with opposing arrowheads. Reads as "sync with remote" more clearly
+  // than the previous download arrow, which looked like Pull.
   return (
     <Svg {...p}>
-      <path d="M8 3v7M8 10 4.5 6.5M8 10l3.5-3.5" />
-      <path d="M3 13h10" />
+      <path d="M13.5 8a5.5 5.5 0 0 1-9.6 3.7" />
+      <path d="M2.5 8a5.5 5.5 0 0 1 9.6-3.7" />
+      <path d="M12.1 1.8v2.5h-2.5" />
+      <path d="M3.9 14.2v-2.5h2.5" />
     </Svg>
   );
 }

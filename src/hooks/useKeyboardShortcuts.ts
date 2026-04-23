@@ -118,6 +118,33 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      // Cmd/Ctrl + Z — reflog-based HEAD undo.
+      // Cmd/Ctrl + Y — redo (Windows-style; a second binding rather than
+      // Cmd+Shift+Z since the latter conflicts with text inputs' native
+      // "redo" on macOS in common web controls).
+      // Skip either when a text input has focus so normal per-field undo
+      // still works while typing a commit message or filter.
+      if (e.key === "z" || e.key === "Z" || e.key === "y" || e.key === "Y") {
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+        const isRedo = e.key === "y" || e.key === "Y";
+        e.preventDefault();
+        try {
+          if (isRedo) {
+            const res = await unwrap(window.gitApi.redoHead());
+            toast("success", res?.label ? `Redid: ${res.label}` : "Redone");
+          } else {
+            const res = await unwrap(window.gitApi.undoHead());
+            toast("success", res?.label ? `Undid: ${res.label}` : "Undone");
+          }
+          await useRepo.getState().refreshAll();
+        } catch (err) {
+          toast("error", err instanceof Error ? err.message : String(err));
+        }
+        return;
+      }
+
       if (e.shiftKey && (e.key === "P" || e.key === "p")) {
         e.preventDefault();
         try {

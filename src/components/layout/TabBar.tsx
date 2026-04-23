@@ -1,4 +1,4 @@
-import { useRepo } from "../../stores/repo";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 
 // -webkit-app-region doesn't inherit in all cases, so we set it explicitly on
@@ -14,7 +14,7 @@ export function TabBar() {
   const setActive = useRepo((s) => s.setActive);
   const closeTab = useRepo((s) => s.closeTab);
   const setWelcomeOpen = useUI((s) => s.setWelcomeOpen);
-  const status = useRepo((s) => s.activeTab?.status);
+  const status = useActiveTab()?.status;
   const hasConflicts = (status?.conflicted.length ?? 0) > 0;
   const isMac =
     typeof navigator !== "undefined" && /Mac/.test(navigator.platform ?? "");

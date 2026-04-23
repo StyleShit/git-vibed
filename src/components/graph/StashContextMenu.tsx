@@ -41,12 +41,14 @@ export function StashContextMenu({
     };
   }, [onClose]);
 
-  // We try to find which stash entry this commit belongs to — usually
-  // stash@{0} because that's what `refs/stash` points at — but if the
-  // user has multiple stashes, only the topmost one actually carries
-  // the ref. The rest are reachable via their index.
+  // Map the clicked commit back to its stash entry by hash. `refs/stash`
+  // only decorates stash@{0}, so the graph decoration alone isn't
+  // enough when the user has several stashes stacked — matching on the
+  // commit SHA resolves the right index regardless of depth.
   const stashEntry =
-    stashes.find((s) => s.index === 0) ?? null;
+    stashes.find((s) => s.hash === commit.hash) ??
+    stashes.find((s) => s.index === 0) ??
+    null;
 
   async function run(label: string, fn: () => Promise<unknown>, closeMenu = true) {
     try {

@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Commit } from "@shared/types";
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { useConfirm } from "../ui/Confirm";
+import { TagCreateDialog } from "../tags/TagCreateDialog";
 
 export function CommitContextMenu({
   x,
@@ -20,6 +21,7 @@ export function CommitContextMenu({
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
   const confirmDialog = useConfirm();
+  const [showTag, setShowTag] = useState(false);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -89,6 +91,10 @@ export function CommitContextMenu({
     onClose();
   }
 
+  function openTagDialog() {
+    setShowTag(true);
+  }
+
   return (
     <>
       <div className="fixed inset-0 z-20" onClick={onClose} />
@@ -101,12 +107,23 @@ export function CommitContextMenu({
         <Item onClick={cherryPick}>Cherry-pick</Item>
         <Item onClick={revert}>Revert</Item>
         <div className="my-1 border-t border-neutral-800" />
+        <Item onClick={openTagDialog}>Create tag here…</Item>
+        <div className="my-1 border-t border-neutral-800" />
         <Item onClick={() => reset("soft")}>Reset (soft)</Item>
         <Item onClick={() => reset("mixed")}>Reset (mixed)</Item>
         <Item onClick={() => reset("hard")} danger>
           Reset (hard)
         </Item>
       </div>
+      {showTag && (
+        <TagCreateDialog
+          initialRef={commit.hash}
+          onClose={() => {
+            setShowTag(false);
+            onClose();
+          }}
+        />
+      )}
     </>
   );
 }

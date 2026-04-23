@@ -7,14 +7,12 @@ import {
   BranchIcon,
   ChevronDownIcon,
   FetchIcon,
-  MoreIcon,
   PullIcon,
   PushIcon,
   RedoIcon,
   SearchIcon,
   SettingsIcon,
   StashIcon,
-  TerminalIcon,
   UndoIcon,
   PlusIcon,
 } from "../ui/Icons";
@@ -26,17 +24,21 @@ type PullStrategy = "merge" | "rebase" | "ff-only";
 // Toolbar layout: repo + branch selectors on the left, two button groups
 // in the middle (history + sync / workflow), utilities on the right.
 export function Toolbar() {
-  const { status, branches, path } = useActiveTabShallow((t) => ({
+  const { status, branches, path, backgroundFetching, undo } = useActiveTabShallow((t) => ({
     status: t?.status ?? null,
     branches: t?.branches ?? [],
     path: t?.path ?? null,
+    backgroundFetching: t?.backgroundFetching ?? false,
+    undo: t?.undo ?? { canUndo: false, canRedo: false },
   }));
   const toast = useUI((s) => s.toast);
   const setCommandPalette = useUI((s) => s.setCommandPalette);
   const refreshAll = useRepo((s) => s.refreshAll);
   const confirmDialog = useConfirm();
   const defaultStrategy = useSettings((s) => s.defaultPullStrategy);
-  const [busy, setBusy] = useState<"pull" | "push" | "fetch" | "stash" | "pop" | null>(null);
+  const [busy, setBusy] = useState<
+    "pull" | "push" | "fetch" | "stash" | "pop" | "undo" | "redo" | null
+  >(null);
   const [pullMenuOpen, setPullMenuOpen] = useState(false);
   const [pushMenuOpen, setPushMenuOpen] = useState(false);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
@@ -132,14 +134,31 @@ export function Toolbar() {
     }
   }
 
-  async function openTerminal() {
-    if (!path) return;
+  async function runUndo() {
+    if (busy || !undo.canUndo) return;
+    setBusy("undo");
     try {
-      await unwrap(window.gitApi.openExternal(`terminal://${path}`));
-    } catch {
-      // Best-effort: fall back to opening the folder if the terminal:// URL
-      // isn't wired on this OS.
-      toast("info", "Terminal integration coming soon");
+      const res = await unwrap(window.gitApi.undoHead());
+      toast("success", res?.label ? `Undid: ${res.label}` : "Undone");
+      await refreshAll();
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function runRedo() {
+    if (busy || !undo.canRedo) return;
+    setBusy("redo");
+    try {
+      const res = await unwrap(window.gitApi.redoHead());
+      toast("success", res?.label ? `Redid: ${res.label}` : "Redone");
+      await refreshAll();
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -161,11 +180,21 @@ export function Toolbar() {
 
       <div className="mx-2 h-6 w-px bg-neutral-800" />
 
-      <ToolbarIconButton disabled title="Undo" hint="Cmd+Z">
-        <UndoIcon className="size-4" />
+      <ToolbarIconButton
+        onClick={runUndo}
+        disabled={!path || !undo.canUndo || !!busy}
+        title={undo.undoLabel ? `Undo: ${undo.undoLabel}` : "Undo"}
+        hint="Cmd+Z"
+      >
+        <UndoIcon className={`size-4 ${busy === "undo" ? "animate-pulse" : ""}`} />
       </ToolbarIconButton>
-      <ToolbarIconButton disabled title="Redo" hint="Cmd+Shift+Z">
-        <RedoIcon className="size-4" />
+      <ToolbarIconButton
+        onClick={runRedo}
+        disabled={!path || !undo.canRedo || !!busy}
+        title={undo.redoLabel ? `Redo: ${undo.redoLabel}` : "Redo"}
+        hint="Cmd+Y"
+      >
+        <RedoIcon className={`size-4 ${busy === "redo" ? "animate-pulse" : ""}`} />
       </ToolbarIconButton>
 
       <div className="mx-2 h-6 w-px bg-neutral-800" />
@@ -175,7 +204,22 @@ export function Toolbar() {
         disabled={!!busy}
         label="Fetch"
         hint="Cmd+Shift+F"
-        icon={<FetchIcon className={`size-4 ${busy === "fetch" ? "animate-pulse" : ""}`} />}
+        title={backgroundFetching ? "Background fetch in progress…" : undefined}
+        icon={
+          <span className="relative inline-flex">
+            <FetchIcon
+              className={`size-4 ${
+                busy === "fetch" || backgroundFetching ? "animate-spin text-indigo-400" : ""
+              }`}
+            />
+            {backgroundFetching && busy !== "fetch" && (
+              <span
+                aria-hidden
+                className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-indigo-400 shadow-[0_0_4px_rgba(129,140,248,0.9)]"
+              />
+            )}
+          </span>
+        }
       />
       <SplitButton
         label="Pull"
@@ -188,9 +232,15 @@ export function Toolbar() {
         menuOpen={pullMenuOpen}
         onMenuClose={() => setPullMenuOpen(false)}
       >
-        <MenuItem onClick={() => runPull("merge")}>Merge (default)</MenuItem>
-        <MenuItem onClick={() => runPull("rebase")}>Rebase</MenuItem>
-        <MenuItem onClick={() => runPull("ff-only")}>Fast-forward only</MenuItem>
+        <MenuItem onClick={() => runPull("merge")}>
+          Merge{defaultStrategy === "merge" ? " (default)" : ""}
+        </MenuItem>
+        <MenuItem onClick={() => runPull("rebase")}>
+          Rebase{defaultStrategy === "rebase" ? " (default)" : ""}
+        </MenuItem>
+        <MenuItem onClick={() => runPull("ff-only")}>
+          Fast-forward only{defaultStrategy === "ff-only" ? " (default)" : ""}
+        </MenuItem>
       </SplitButton>
       <SplitButton
         label="Push"
@@ -229,17 +279,11 @@ export function Toolbar() {
       />
 
       <div className="ml-auto flex items-center gap-1">
-        <ToolbarIconButton onClick={openTerminal} disabled={!path} title="Open in terminal">
-          <TerminalIcon className="size-4" />
-        </ToolbarIconButton>
         <ToolbarIconButton
           onClick={() => useUI.getState().setView("settings")}
           title="Settings"
         >
           <SettingsIcon className="size-4" />
-        </ToolbarIconButton>
-        <ToolbarIconButton title="Actions">
-          <MoreIcon className="size-4" />
         </ToolbarIconButton>
         <ToolbarIconButton
           onClick={() => setCommandPalette(true)}
@@ -426,6 +470,7 @@ function ToolbarButton({
   label,
   hint,
   icon,
+  title: titleOverride,
 }: {
   children?: React.ReactNode;
   onClick: () => void;
@@ -433,8 +478,9 @@ function ToolbarButton({
   label?: string;
   hint?: string;
   icon?: React.ReactNode;
+  title?: string;
 }) {
-  const title = hint ? `${label} (${hint})` : label;
+  const title = titleOverride ?? (hint ? `${label} (${hint})` : label);
   return (
     <button
       onClick={onClick}
@@ -575,7 +621,7 @@ function MenuItem({
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center px-3 py-1.5 text-left text-sm hover:bg-neutral-800"
+      className="flex w-full items-center whitespace-nowrap px-3 py-1.5 text-left text-sm hover:bg-neutral-800"
     >
       {children}
     </button>

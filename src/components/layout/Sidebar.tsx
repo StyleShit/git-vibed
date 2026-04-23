@@ -17,6 +17,8 @@ import {
 } from "../ui/Icons";
 import { BranchCreateDialog } from "../branches/BranchCreateDialog";
 import { AddRemoteDialog } from "../remotes/AddRemoteDialog";
+import { TagCreateDialog } from "../tags/TagCreateDialog";
+import { WorktreeAddDialog } from "../worktrees/WorktreeAddDialog";
 
 type SectionId = "local" | "remote" | "stashes" | "worktrees" | "prs" | "tags";
 
@@ -56,6 +58,8 @@ export function Sidebar() {
   const remoteRef = useRef<BranchListHandle>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showAddRemote, setShowAddRemote] = useState(false);
+  const [showTagCreate, setShowTagCreate] = useState(false);
+  const [showWorktreeAdd, setShowWorktreeAdd] = useState(false);
 
   const sections = useMemo<SectionDef[]>(
     () => [
@@ -123,6 +127,14 @@ export function Sidebar() {
         count: worktreeCount,
         show: true,
         render: (f) => <WorktreeList filter={f} />,
+        actions: (
+          <HeaderActionButton
+            title="Add worktree"
+            onClick={() => setShowWorktreeAdd(true)}
+          >
+            <PlusIcon className="size-3.5" />
+          </HeaderActionButton>
+        ),
       },
       {
         id: "stashes",
@@ -144,6 +156,14 @@ export function Sidebar() {
         count: tagCount,
         show: true,
         render: (f) => <TagList filter={f} />,
+        actions: (
+          <HeaderActionButton
+            title="New tag"
+            onClick={() => setShowTagCreate(true)}
+          >
+            <PlusIcon className="size-3.5" />
+          </HeaderActionButton>
+        ),
       },
     ],
     [localCount, remoteCount, stashCount, tagCount, worktreeCount, prCount, ghAvailable],
@@ -174,6 +194,8 @@ export function Sidebar() {
       </div>
       {showCreate && <BranchCreateDialog onClose={() => setShowCreate(false)} />}
       {showAddRemote && <AddRemoteDialog onClose={() => setShowAddRemote(false)} />}
+      {showTagCreate && <TagCreateDialog onClose={() => setShowTagCreate(false)} />}
+      {showWorktreeAdd && <WorktreeAddDialog onClose={() => setShowWorktreeAdd(false)} />}
     </aside>
   );
 }

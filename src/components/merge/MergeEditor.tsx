@@ -406,7 +406,6 @@ export function MergeEditor() {
         message: `Resolve ${fileName}`,
         amend: false,
         noVerify: false,
-        signOff: false
       }));
       toast("success", "Resolved and committed");
       await refreshAll();
