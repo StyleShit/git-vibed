@@ -33,7 +33,7 @@
 | --- | ----------- | ---------- | ------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | 00  | —           | —          | —       | [00-shared-context.md](00-shared-context.md)                             | (reference — always read first)                                            |
 | 01  | Done        | 2026-04-23 | 698f6d0 | [01-base-ui-migration.md](01-base-ui-migration.md)                       | "base ui", "base-ui", "dialog migration", "context menu library"           |
-| 02  | Not started | —          | —       | [02-vitest-setup-and-smoke-tests.md](02-vitest-setup-and-smoke-tests.md) | "vitest", "tests", "smoke tests", "test setup"                             |
+| 02  | Done        | 2026-04-23 | d81f529 | [02-vitest-setup-and-smoke-tests.md](02-vitest-setup-and-smoke-tests.md) | "vitest", "tests", "smoke tests", "test setup"                             |
 | 03  | Not started | —          | —       | [03-tanstack-query-plan.md](03-tanstack-query-plan.md)                   | "tanstack query plan", "react query plan", "query migration plan"          |
 | 04  | Not started | —          | —       | [04-decompose-merge-editor.md](04-decompose-merge-editor.md)             | "decompose merge editor", "split merge editor", "merge editor refactor"    |
 | 05  | Not started | —          | —       | [05-decompose-branch-graph.md](05-decompose-branch-graph.md)             | "decompose branch graph", "split branch graph", "graph refactor"           |
