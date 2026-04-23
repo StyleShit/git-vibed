@@ -33,6 +33,11 @@ export function UnifiedView({
 }: UnifiedProps) {
   return (
     <pre className="hljs mono whitespace-pre overflow-x-auto overflow-y-auto p-0 text-[12px] leading-relaxed">
+      {/* Inner wrapper sized to the widest line (w-max) but at least the
+          viewport width (min-w-full). Without it, each row is only as wide
+          as the pre's visible box, so row backgrounds are clipped when the
+          user scrolls horizontally past the original viewport. */}
+      <div className="w-max min-w-full">
       {diff.hunks.map((h, hi) => (
         <div key={hi}>
           <div className="flex items-center justify-between bg-neutral-900 px-2 py-0.5 text-indigo-300 sticky top-0">
@@ -87,6 +92,7 @@ export function UnifiedView({
           })}
         </div>
       ))}
+      </div>
     </pre>
   );
 }
@@ -211,6 +217,10 @@ export function SplitView({
   return (
     <div className="hljs mono flex p-0 text-[12px] leading-relaxed">
       <div className="w-1/2 overflow-x-auto overflow-y-hidden">
+        {/* See UnifiedView: inner w-max/min-w-full wrapper so row
+            backgrounds extend to the widest line, not just the
+            visible column width. */}
+        <div className="w-max min-w-full">
         {pairs.map((p, i) =>
           p.header ? (
             <div key={i} className="bg-neutral-900 px-2 py-0.5 text-indigo-300">
@@ -234,9 +244,11 @@ export function SplitView({
             />
           ),
         )}
+        </div>
       </div>
       <div className="w-px bg-neutral-800" />
       <div className="w-1/2 overflow-x-auto overflow-y-hidden">
+        <div className="w-max min-w-full">
         {pairs.map((p, i) =>
           p.header ? (
             <div key={i} className="bg-neutral-900 px-2 py-0.5 text-indigo-300">
@@ -260,6 +272,7 @@ export function SplitView({
             />
           ),
         )}
+        </div>
       </div>
     </div>
   );
