@@ -596,14 +596,24 @@ export class GitExecutor {
   // to show "2 modified + 1 added" breakdown plus per-file adds/removes.
   async commitFiles(hash: string): Promise<CommitFile[]> {
     try {
-      // `show` with name-status gives status (M/A/D/R…); numstat gives the
-      // add/remove counts. Running them together keeps things in sync.
+      // diff-tree gives a predictable per-parent diff — for a merge commit
+      // `git show --name-status` without -m falls back to combined-diff
+      // format (e.g. "RR100\told\tnew" or "MM\tpath"), which our parser
+      // can't read, so the commit detail panel rendered blank file rows
+      // with just a status badge. --first-parent collapses merges to
+      // "diff vs the first parent" (the tip of the target branch before
+      // the merge), which is what users usually mean by "what the merge
+      // brought in". Non-merge commits are unaffected.
       const raw = await this.git.raw([
-        "show",
-        "--format=",
+        "diff-tree",
+        "-r",
+        "--no-commit-id",
         "--name-status",
         "--numstat",
-        "-z", // NUL-delimited so filenames with spaces/newlines work.
+        "--find-renames",
+        "-m",
+        "--first-parent",
+        "-z",
         hash,
       ]);
       const parts = raw.split("\0").filter((x) => x.length > 0);
