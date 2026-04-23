@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
@@ -17,6 +18,17 @@ export function ConflictList() {
   const isRebase = !!status?.rebaseInProgress;
   const isMerge = !!status?.mergeInProgress;
   const canContinue = conflicts.length === 0 && (isRebase || isMerge);
+
+  // Opening the merge view with nothing selected is a dead-end — the
+  // editor just shows "select a file on the left." Auto-pick the first
+  // conflict so the user lands straight in the resolver. Also falls
+  // through after a file is resolved and drops out of `conflicts` (if
+  // the current selection is gone, jump to the next remaining one).
+  useEffect(() => {
+    if (conflicts.length === 0) return;
+    const stillValid = selected && conflicts.some((f) => f.path === selected);
+    if (!stillValid) selectConflictFile(conflicts[0].path);
+  }, [conflicts, selected, selectConflictFile]);
 
   async function finish() {
     try {

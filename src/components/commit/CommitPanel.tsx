@@ -23,7 +23,13 @@ export function CommitPanel() {
   );
   // Track whether we already pre-filled from MERGE_MSG so we don't clobber
   // user edits on every status refresh while the merge is still in progress.
+  // Also remember the exact prefilled text so we can cleanly wipe it on
+  // merge abort without touching anything the user typed themselves.
   const [mergeMessagePrefilled, setMergeMessagePrefilled] = useState(false);
+  const [prefilledText, setPrefilledText] = useState<{
+    subject: string;
+    description: string;
+  } | null>(null);
 
   const mergeInProgress = !!status?.mergeInProgress;
   const conflictsRemaining = (status?.conflicted.length ?? 0) > 0;
@@ -89,10 +95,23 @@ export function CommitPanel() {
   // Pre-fill the subject/description from .git/MERGE_MSG when a merge
   // starts. Only runs once per merge (guarded by mergeMessagePrefilled)
   // so we don't stomp on edits the user makes while resolving conflicts.
-  // Resets when the merge ends so the next one gets a fresh prefill.
+  // When the merge ends (committed OR aborted), wipe the prefilled text
+  // if it's still untouched so the box isn't left holding a stale
+  // "Merge branch X into Y" line from a merge the user just aborted.
   useEffect(() => {
     if (!mergeInProgress) {
-      if (mergeMessagePrefilled) setMergeMessagePrefilled(false);
+      if (mergeMessagePrefilled) {
+        if (
+          prefilledText &&
+          subject === prefilledText.subject &&
+          description === prefilledText.description
+        ) {
+          setSubject("");
+          setDescription("");
+        }
+        setMergeMessagePrefilled(false);
+        setPrefilledText(null);
+      }
       return;
     }
     if (mergeMessagePrefilled || amend) return;
@@ -103,8 +122,11 @@ export function CommitPanel() {
       // Only prefill if the user hasn't already started typing something,
       // so their own subject wins over the git-generated one.
       if (!subject.trim() && !description.trim()) {
-        setSubject(first ?? "");
-        setDescription(rest.join("\n\n"));
+        const nextSubject = first ?? "";
+        const nextDescription = rest.join("\n\n");
+        setSubject(nextSubject);
+        setDescription(nextDescription);
+        setPrefilledText({ subject: nextSubject, description: nextDescription });
       }
       setMergeMessagePrefilled(true);
     })();
