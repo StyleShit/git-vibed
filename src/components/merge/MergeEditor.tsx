@@ -340,23 +340,31 @@ export function MergeEditor() {
       theirsLine += r.theirsSpan;
     });
 
+    // render(true) forces Monaco to redraw the view (including the
+    // decorations we just applied) in the same tick instead of
+    // scheduling it for the next animation frame. Without it, new
+    // content paints first and the red/green tint catches up a frame
+    // or two later, which reads as a visible lag on file switches.
     if (resultEditorRef.current) {
       resultDecosRef.current = resultEditorRef.current.deltaDecorations(
         resultDecosRef.current,
         resultDecos,
       );
+      resultEditorRef.current.render(true);
     }
     if (oursEditorRef.current) {
       oursDecosRef.current = oursEditorRef.current.deltaDecorations(
         oursDecosRef.current,
         oursDecos,
       );
+      oursEditorRef.current.render(true);
     }
     if (theirsEditorRef.current) {
       theirsDecosRef.current = theirsEditorRef.current.deltaDecorations(
         theirsDecosRef.current,
         theirsDecos,
       );
+      theirsEditorRef.current.render(true);
     }
   }, [regions, result, lineMarks, editorsEpoch]);
 
