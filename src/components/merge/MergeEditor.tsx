@@ -90,6 +90,13 @@ export function MergeEditor() {
     newContent: string;
   } | null>(null);
 
+  // Bumped whenever a Monaco editor instance mounts. The decoration
+  // effect watches this so it re-runs after the three panes
+  // (re-)mount — necessary when the user navigates from a special
+  // conflict (which tears the panes down) back to a both-modified
+  // one, otherwise the effect fires against stale/disposed editor
+  // refs and no red/green tint shows up.
+  const [editorsEpoch, setEditorsEpoch] = useState(0);
   const oursEditorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
   const resultEditorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
   const theirsEditorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
@@ -98,6 +105,24 @@ export function MergeEditor() {
   const oursDecosRef = useRef<string[]>([]);
   const theirsDecosRef = useRef<string[]>([]);
   const syncingRef = useRef(false);
+
+  // The three-pane section is conditionally rendered. When we switch
+  // to a special-conflict prompt the <Editor> instances unmount, but
+  // the refs above are never auto-cleared — they keep pointing at the
+  // disposed editors. Clear them here so the decoration effect can't
+  // call deltaDecorations on a dead instance, and so the next mount's
+  // onMount is writing to a clean slate.
+  useEffect(() => {
+    if (conflictKind !== null && conflictKind !== "both-modified") {
+      oursEditorRef.current = null;
+      resultEditorRef.current = null;
+      theirsEditorRef.current = null;
+      monacoRef.current = null;
+      oursDecosRef.current = [];
+      resultDecosRef.current = [];
+      theirsDecosRef.current = [];
+    }
+  }, [conflictKind]);
 
   // One set of anchors per gutter, each aligned to the pane it borders.
   // Ours gutter uses the ours editor's line positions; theirs gutter uses
@@ -333,7 +358,7 @@ export function MergeEditor() {
         theirsDecos,
       );
     }
-  }, [regions, result, lineMarks]);
+  }, [regions, result, lineMarks, editorsEpoch]);
 
   // Recompute per-gutter anchor positions. Each gutter is anchored to the
   // pane it borders: the ours gutter reads the ours editor's line Y, the
@@ -640,6 +665,10 @@ export function MergeEditor() {
             theme={EDITOR_THEME}
             onMount={(e) => {
               oursEditorRef.current = e;
+              // Stale IDs from the previous mount can't be applied to
+              // this fresh editor instance — start the next
+              // deltaDecorations call with an empty baseline.
+              oursDecosRef.current = [];
               e.onDidScrollChange((ev) => {
                 if (syncingRef.current) return;
                 syncingRef.current = true;
@@ -650,6 +679,7 @@ export function MergeEditor() {
               });
               e.onMouseDown(onSideMouseDown("ours"));
               recomputeAnchors();
+              setEditorsEpoch((n) => n + 1);
             }}
           />
         </div>
@@ -670,6 +700,7 @@ export function MergeEditor() {
             onMount={(e, m) => {
               resultEditorRef.current = e;
               monacoRef.current = m;
+              resultDecosRef.current = [];
               e.onDidScrollChange((ev) => {
                 if (syncingRef.current) return;
                 syncingRef.current = true;
@@ -690,6 +721,7 @@ export function MergeEditor() {
                 }
               });
               recomputeAnchors();
+              setEditorsEpoch((n) => n + 1);
             }}
           />
         </div>
@@ -708,6 +740,7 @@ export function MergeEditor() {
             theme={EDITOR_THEME}
             onMount={(e) => {
               theirsEditorRef.current = e;
+              theirsDecosRef.current = [];
               e.onDidScrollChange((ev) => {
                 if (syncingRef.current) return;
                 syncingRef.current = true;
@@ -718,6 +751,7 @@ export function MergeEditor() {
               });
               e.onMouseDown(onSideMouseDown("theirs"));
               recomputeAnchors();
+              setEditorsEpoch((n) => n + 1);
             }}
           />
         </div>
