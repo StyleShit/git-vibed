@@ -1,13 +1,14 @@
 import { useEffect, useMemo } from "react";
 import { useActive, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
+import { useSettings } from "../../stores/settings";
 import type { PullRequest } from "@shared/types";
 
 export function PRList({ filter }: { filter: string }) {
   const prs = useActive("prs") ?? [];
   const selectPR = useUI((s) => s.selectPR);
-  const stateFilter = useUI((s) => s.prStateFilter);
-  const setStateFilter = useUI((s) => s.setPrStateFilter);
+  const stateFilter = useSettings((s) => s.prStateFilter);
+  const setStateFilter = useSettings((s) => s.setPrStateFilter);
   const refreshPRs = useRepo((s) => s.refreshPRs);
 
   // Re-fetch the PR list whenever the state filter changes so the list

@@ -13,6 +13,7 @@ import type {
 } from "@shared/types";
 import { unwrap, maybe } from "../lib/ipc";
 import { useUI } from "./ui";
+import { useSettings } from "./settings";
 
 // Per-tab data. Each open repository has its own slice, so switching tabs
 // surfaces the other repo's state instantly without re-fetching.
@@ -288,7 +289,7 @@ export const useRepo = create<RepoState>((set, get) => ({
       get().patchTab(path, { prs: [] });
       return;
     }
-    const stateFilter = useUI.getState().prStateFilter;
+    const stateFilter = useSettings.getState().prStateFilter;
     const prs = await maybe(window.ghApi.prList(stateFilter));
     get().patchTab(path, { prs: prs ?? [] });
   },

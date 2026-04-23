@@ -10,6 +10,14 @@ type SidebarSectionId =
   | "prs"
   | "tags";
 
+export interface GraphColumns {
+  refs: boolean;
+  message: boolean;
+  author: boolean;
+  date: boolean;
+  sha: boolean;
+}
+
 interface SettingsState {
   theme: "dark" | "light" | "system";
   autoFetchIntervalMs: number;
@@ -33,6 +41,12 @@ interface SettingsState {
   // collapsed across repos, which matches how other clients like VSCode
   // behave and keeps the state file small.
   collapsedBranchFolders: Record<BranchKind, string[]>;
+  // Graph column visibility toggles from the gear menu. Persisted so a user
+  // who hides SHA/date once doesn't have to re-hide them on every launch.
+  graphColumns: GraphColumns;
+  // PR list filter (open/closed/all). The user's last choice is usually
+  // the one they want next time the app opens.
+  prStateFilter: "open" | "closed" | "all";
   setTheme: (t: SettingsState["theme"]) => void;
   setAutoFetchIntervalMs: (ms: number) => void;
   setDefaultPullStrategy: (s: SettingsState["defaultPullStrategy"]) => void;
@@ -43,7 +57,17 @@ interface SettingsState {
   setInspectorWidth: (w: number) => void;
   setCollapsedSidebarSections: (ids: SidebarSectionId[]) => void;
   setCollapsedBranchFolders: (kind: BranchKind, paths: string[]) => void;
+  setGraphColumn: (k: keyof GraphColumns, v: boolean) => void;
+  setPrStateFilter: (s: SettingsState["prStateFilter"]) => void;
 }
+
+const DEFAULT_GRAPH_COLUMNS: GraphColumns = {
+  refs: true,
+  message: true,
+  author: true,
+  date: true,
+  sha: true,
+};
 
 export const useSettings = create<SettingsState>()(
   persist(
@@ -60,6 +84,8 @@ export const useSettings = create<SettingsState>()(
       // with Tags collapsed on first run after the upgrade.
       collapsedSidebarSections: ["tags"],
       collapsedBranchFolders: { local: [], remote: [] },
+      graphColumns: DEFAULT_GRAPH_COLUMNS,
+      prStateFilter: "open",
       setTheme: (theme) => set({ theme }),
       setAutoFetchIntervalMs: (autoFetchIntervalMs) =>
         set({ autoFetchIntervalMs }),
@@ -82,6 +108,9 @@ export const useSettings = create<SettingsState>()(
             [kind]: paths,
           },
         })),
+      setGraphColumn: (k, v) =>
+        set((s) => ({ graphColumns: { ...s.graphColumns, [k]: v } })),
+      setPrStateFilter: (prStateFilter) => set({ prStateFilter }),
     }),
     { name: "Git Vibed-settings" }
   )
