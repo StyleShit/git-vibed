@@ -586,6 +586,7 @@ export function MergeEditor() {
         onClose={onClose}
         canSave={!loading && !needsPrompt}
         specialActions={specialActions}
+        specialFile={needsPrompt ? file : null}
         onSpecialAction={resolveSpecial}
       />
       {needsPrompt ? (
@@ -973,11 +974,11 @@ function ConflictChoicePanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col border-t border-neutral-800 bg-neutral-950">
-      <div className="shrink-0 border-b border-neutral-800 bg-neutral-925 px-4 py-3">
-        <h3 className="text-sm font-medium text-neutral-100">
-          How should we resolve <span className="mono text-indigo-300">{file}</span>?
-        </h3>
-        <p className="mt-0.5 text-xs text-neutral-400">{summary}</p>
+      {/* Summary line only — the primary "How should we resolve …"
+          question moved up into the toolbar to share the row with the
+          resolution buttons. */}
+      <div className="shrink-0 border-b border-neutral-800 bg-neutral-925 px-4 py-2 text-xs text-neutral-400">
+        {summary}
       </div>
 
       {compare.mode === "diff" ? (
@@ -1119,6 +1120,7 @@ function MergeToolbar({
   onClose,
   canSave,
   specialActions,
+  specialFile,
   onSpecialAction,
 }: {
   unresolved: number;
@@ -1133,6 +1135,7 @@ function MergeToolbar({
   // replace "All ours" / "All theirs" / "Mark resolved" — the text-
   // merge actions wouldn't do anything sensible there.
   specialActions: ResolutionAction[] | null;
+  specialFile: string | null;
   onSpecialAction: (choice: "keep-ours" | "keep-theirs" | "delete") => void;
 }) {
   return (
@@ -1140,10 +1143,15 @@ function MergeToolbar({
       {specialActions ? (
         // Choice-panel mode: no text-merge actions on the left and no
         // prev/next nav (the current file has a single decision, not a
-        // list of chunks to walk). Resolution buttons live on the right
-        // in the slot "Mark resolved" normally occupies.
+        // list of chunks to walk). Prompt question anchors the left
+        // edge; resolution buttons sit on the right in the slot "Mark
+        // resolved" normally occupies.
         <>
-          <div className="ml-auto flex items-center gap-2">
+          <span className="ml-1 truncate pr-3 text-sm text-neutral-200">
+            How should we resolve{" "}
+            <span className="mono text-indigo-300">{specialFile ?? ""}</span>?
+          </span>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             {specialActions.map((a) => (
               <button
                 key={a.choice}
