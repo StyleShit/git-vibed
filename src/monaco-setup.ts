@@ -62,6 +62,19 @@ monaco.editor.defineTheme("git-vibed-dark", {
     "editorGutter.background": "#0d1117",
     "scrollbarSlider.background": "#525252a0",
     "scrollbarSlider.hoverBackground": "#6b6b6ba0",
+    // DiffEditor colors. `inherit: true` pulls vs-dark's syntax rules
+    // but Monaco's diff editor reads a separate palette of
+    // diffEditor.* keys, and vs-dark's defaults wash out against the
+    // github-dark background we use everywhere else — the result was
+    // a diff view that just displayed both files in plain text with
+    // no red/green to tell them apart. Define the keys explicitly.
+    "diffEditor.insertedTextBackground": "#10b98130",
+    "diffEditor.removedTextBackground": "#ef444430",
+    "diffEditor.insertedLineBackground": "#10b98118",
+    "diffEditor.removedLineBackground": "#ef444418",
+    "diffEditorGutter.insertedLineBackground": "#10b98128",
+    "diffEditorGutter.removedLineBackground": "#ef444428",
+    "diffEditor.border": "#30363d",
   },
 });
 
