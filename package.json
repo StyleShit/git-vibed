@@ -15,13 +15,11 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "chokidar": "^5.0.0",
-    "diff2html": "^3.4.56",
     "highlight.js": "^11.11.1",
     "monaco-editor": "^0.55.1",
     "node-diff3": "^3.2.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-window": "^2.2.7",
     "simple-git": "^3.36.0",
     "zustand": "^5.0.12"
   },
