@@ -10,11 +10,13 @@ import { App } from "./App";
 import { ConfirmProvider } from "./components/ui/Confirm";
 import { toastManager } from "./stores/ui";
 import { queryClient } from "./queries/client";
+import { RepoEventBridge } from "./queries/RepoEventBridge";
 
 const root = createRoot(document.getElementById("root") as HTMLElement);
 root.render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
+      <RepoEventBridge />
       <Toast.Provider toastManager={toastManager}>
         <Tooltip.Provider delay={400}>
           <ConfirmProvider>

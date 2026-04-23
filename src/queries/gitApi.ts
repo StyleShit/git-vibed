@@ -18,6 +18,12 @@ export function gitStatusOptions(path: string) {
     queryFn: () => unwrap(window.gitApi.status()),
     staleTime: 0,
     gcTime: 5 * 60_000,
+    // Work-tree edits never touch .git, so the main-process watcher
+    // doesn't see them. Poll every 5s while the window is visible to
+    // catch drift, and refetch on window focus for the same reason.
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 }
 
