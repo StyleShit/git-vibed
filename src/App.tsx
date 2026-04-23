@@ -19,6 +19,7 @@ export function App() {
   const theme = useSettings((s) => s.theme);
   const sidebarWidth = useSettings((s) => s.sidebarWidth);
   const setSidebarWidth = useSettings((s) => s.setSidebarWidth);
+  const autoFetchIntervalMs = useSettings((s) => s.autoFetchIntervalMs);
   const toast = useUI((s) => s.toast);
   const welcomeOpen = useUI((s) => s.welcomeOpen);
 
@@ -40,6 +41,14 @@ export function App() {
     }
   }, [theme]);
 
+  // Push the configured auto-fetch interval to the main process on mount and
+  // whenever the dropdown in Settings changes it. The main process defaults
+  // to 5 minutes, so this also rebinds existing sessions if the user picked
+  // something else previously and the value was just hydrated from storage.
+  useEffect(() => {
+    void window.gitApi.setAutoFetchInterval(autoFetchIntervalMs);
+  }, [autoFetchIntervalMs]);
+
   // Fan-in watcher events from the main process. Each event carries its
   // repoPath so we only refresh the matching tab rather than everything.
   useEffect(() => {
@@ -50,7 +59,9 @@ export function App() {
       refreshStashes,
       refreshTags,
       refreshWorktrees,
+      refreshUndoState,
       setBehindRemote,
+      setBackgroundFetching,
     } = useRepo.getState();
     const off1 = window.gitApi.onRepoChanged((e) => {
       const target = e.repoPath;
@@ -63,6 +74,7 @@ export function App() {
         void refreshBranches(target);
         void refreshLog({ all: true }, target);
         void refreshWorktrees(target);
+        void refreshUndoState(target);
       }
       if (e.type === "refs") {
         void refreshBranches(target);
@@ -70,13 +82,50 @@ export function App() {
         void refreshTags(target);
       }
     });
+    // Keep the background-fetch indicator visible for at least MIN_SPINNER_MS
+    // even when the fetch itself returns in a few dozen ms. Otherwise the
+    // icon flickers so briefly the user can't tell a fetch ran at all.
+    const MIN_SPINNER_MS = 700;
+    const startedAt = new Map<string, number>();
+
     const off2 = window.gitApi.onFetchComplete((e) => {
       setBehindRemote(e.repoPath, e.behind);
-      if (e.errors) toast("error", `Auto-fetch failed: ${e.errors}`);
+      const began = startedAt.get(e.repoPath);
+      const elapsed = began != null ? Date.now() - began : MIN_SPINNER_MS;
+      const remaining = Math.max(0, MIN_SPINNER_MS - elapsed);
+      startedAt.delete(e.repoPath);
+      if (remaining === 0) {
+        setBackgroundFetching(e.repoPath, false);
+      } else {
+        window.setTimeout(
+          () => setBackgroundFetching(e.repoPath, false),
+          remaining,
+        );
+      }
+      if (e.errors) {
+        toast("error", `Auto-fetch failed: ${e.errors}`);
+        return;
+      }
+      // The FS watcher skips `refs/remotes/**` to avoid EMFILE on large
+      // repos, so it won't wake up when a fetch writes loose remote refs.
+      // Drive the refresh off the fetch event instead — but only when the
+      // main process reports that something actually moved, so a no-op
+      // tick doesn't churn the UI every minute.
+      if (e.changed) {
+        void refreshBranches(e.repoPath);
+        void refreshLog({ all: true }, e.repoPath);
+        void refreshTags(e.repoPath);
+        void refreshStatus(e.repoPath);
+      }
+    });
+    const off3 = window.gitApi.onFetchStart((e) => {
+      startedAt.set(e.repoPath, Date.now());
+      setBackgroundFetching(e.repoPath, true);
     });
     return () => {
       off1();
       off2();
+      off3();
     };
   }, [toast]);
 
