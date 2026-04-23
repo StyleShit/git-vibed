@@ -1,9 +1,11 @@
 import { useMemo } from "react";
 import { Menu } from "@base-ui-components/react/menu";
+import { useQuery } from "@tanstack/react-query";
 import type { Commit } from "@shared/types";
-import { useRepo, useActive } from "../../stores/repo";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { gitStashesOptions } from "../../queries/gitApi";
 import { useConfirm } from "../ui/Confirm";
 
 // Context menu shown when the user right-clicks a commit that also
@@ -25,7 +27,8 @@ export function StashContextMenu({
 }) {
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
-  const stashes = useActive("stashes") ?? [];
+  const activePath = useActiveTab()?.path;
+  const stashes = useQuery(gitStashesOptions(activePath)).data ?? [];
   const confirmDialog = useConfirm();
 
   const anchor = useMemo(

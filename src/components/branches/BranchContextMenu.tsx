@@ -1,10 +1,17 @@
 import { useMemo, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
+import { useQuery } from "@tanstack/react-query";
 import type { Branch } from "@shared/types";
-import { useRepo, useActive } from "../../stores/repo";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
+import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
 import { buildCreatePrUrl } from "../../lib/pr-url";
+import {
+  gitRemotesOptions,
+  ghAvailableOptions,
+  prsOptions,
+} from "../../queries/gitApi";
 import { Prompt } from "../ui/Prompt";
 import { useConfirm } from "../ui/Confirm";
 
@@ -33,9 +40,12 @@ export function BranchContextMenu({
 }: Props) {
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
-  const ghAvailable = useActive("ghAvailable") ?? false;
-  const remotes = useActive("remotes") ?? [];
-  const prs = useActive("prs") ?? [];
+  const activePath = useActiveTab()?.path;
+  const prStateFilter = useSettings((s) => s.prStateFilter);
+  const ghAvailable = useQuery(ghAvailableOptions(activePath)).data ?? false;
+  const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
+  const prs =
+    useQuery(prsOptions(activePath, prStateFilter, ghAvailable)).data ?? [];
   const confirmDialog = useConfirm();
 
   // A branch has a "live" PR if GitHub returned one whose head matches.

@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { useActive, useRepo } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useActiveTab, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { gitWorktreesOptions } from "../../queries/gitApi";
 import { WorktreeIcon, LockIcon, BranchIcon } from "../ui/Icons";
 import { useConfirm } from "../ui/Confirm";
 import type { Worktree } from "@shared/types";
 
 export function WorktreeList({ filter }: { filter: string }) {
-  const worktrees = useActive("worktrees") ?? [];
+  const activePath = useActiveTab()?.path;
+  const worktrees = useQuery(gitWorktreesOptions(activePath)).data ?? [];
   const refreshAll = useRepo((s) => s.refreshAll);
   const openRepo = useRepo((s) => s.openRepo);
   const toast = useUI((s) => s.toast);

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useActive, useRepo } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useActiveTab, useRepo } from "../../stores/repo";
+import { gitStashesOptions } from "../../queries/gitApi";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { maybe, unwrap } from "../../lib/ipc";
@@ -20,7 +22,8 @@ import type { FileDiff, FileStatus } from "@shared/types";
 // diff in the main view. The per-file diff itself is rendered by
 // StashFileDiff using the shared DiffView components.
 export function StashDetail({ index }: { index: number }) {
-  const stashes = useActive("stashes") ?? [];
+  const activePath = useActiveTab()?.path;
+  const stashes = useQuery(gitStashesOptions(activePath)).data ?? [];
   const stash = stashes.find((s) => s.index === index);
   const selectStash = useUI((s) => s.selectStash);
   const selectStashFile = useUI((s) => s.selectStashFile);

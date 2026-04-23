@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { useRepo, useActive } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { gitRemotesOptions } from "../../queries/gitApi";
 import { Dialog } from "../ui/Dialog";
 import { useConfirm } from "../ui/Confirm";
 import type { Remote } from "@shared/types";
 
 export function RemotesPanel() {
-  const remotes = useActive("remotes") ?? [];
+  const activePath = useActiveTab()?.path;
+  const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
   const refreshRemotes = useRepo((s) => s.refreshRemotes);
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
