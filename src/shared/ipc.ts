@@ -13,7 +13,6 @@ export const GIT = {
   DISCARD_PATCH: "git:discard-patch",
   DISCARD: "git:discard",
   DIFF: "git:diff",
-  DIFF_STAGED: "git:diff-staged",
   LOG: "git:log",
   BRANCHES: "git:branches",
   BRANCH_CREATE: "git:branch-create",
@@ -70,6 +69,15 @@ export const GIT = {
   OPEN_REPOS: "git:open-repos",
   SESSION_GET: "git:session-get",
   SESSION_SET: "git:session-set",
+  SET_AUTO_FETCH_INTERVAL: "git:set-auto-fetch-interval",
+  // Undo / redo move HEAD forward/back along the reflog using
+  // `git reset --keep`, which refuses to clobber uncommitted local
+  // changes. The main process keeps an in-memory redo stack per repo
+  // session; it's cleared whenever HEAD moves via a path we didn't
+  // originate (e.g. the user commits something new after undoing).
+  UNDO_HEAD: "git:undo-head",
+  REDO_HEAD: "git:redo-head",
+  UNDO_STATE: "git:undo-state",
 } as const;
 
 export const GH = {
@@ -86,6 +94,6 @@ export const GH = {
 
 export const EVENTS = {
   REPO_CHANGED: "repo:changed",
+  FETCH_START: "fetch:start",
   FETCH_COMPLETE: "fetch:complete",
-  GIT_PROGRESS: "git:progress",
 } as const;
