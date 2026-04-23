@@ -8,3 +8,5 @@ release/
 .idea/
 .env
 .env.local
+.vitest-attachments
+**/__screenshots__

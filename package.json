@@ -10,7 +10,12 @@
     "build": "tsc -p tsconfig.node.json && vite build && electron-builder",
     "build:unpack": "tsc -p tsconfig.node.json && vite build && electron-builder --dir",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:unit": "vitest run --project=unit",
+    "test:browser": "vitest run --project=browser"
   },
   "dependencies": {
     "@base-ui-components/react": "1.0.0-rc.0",
@@ -26,16 +31,23 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/browser": "^4.1.5",
+    "@vitest/browser-playwright": "^4.1.5",
+    "@vitest/ui": "^4.1.5",
     "electron": "^41.2.1",
     "electron-builder": "^26.8.2",
+    "playwright": "^1.59.1",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.0",
     "vite": "^8.0.9",
-    "vite-plugin-electron": "^0.29.1"
+    "vite-plugin-electron": "^0.29.1",
+    "vitest": "^4.1.5"
   },
   "build": {
     "appId": "com.gitvibed.app",
