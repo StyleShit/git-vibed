@@ -62,19 +62,25 @@ monaco.editor.defineTheme("git-vibed-dark", {
     "editorGutter.background": "#0d1117",
     "scrollbarSlider.background": "#525252a0",
     "scrollbarSlider.hoverBackground": "#6b6b6ba0",
-    // DiffEditor colors. `inherit: true` pulls vs-dark's syntax rules
-    // but Monaco's diff editor reads a separate palette of
-    // diffEditor.* keys, and vs-dark's defaults wash out against the
-    // github-dark background we use everywhere else — the result was
-    // a diff view that just displayed both files in plain text with
-    // no red/green to tell them apart. Define the keys explicitly.
-    "diffEditor.insertedTextBackground": "#10b98130",
-    "diffEditor.removedTextBackground": "#ef444430",
-    "diffEditor.insertedLineBackground": "#10b98118",
-    "diffEditor.removedLineBackground": "#ef444418",
-    "diffEditorGutter.insertedLineBackground": "#10b98128",
-    "diffEditorGutter.removedLineBackground": "#ef444428",
+    // DiffEditor colors. Monaco's diff editor uses a separate palette
+    // from the normal editor; vs-dark defaults washed out against
+    // this background, and `inherit: true` on the custom theme didn't
+    // pull them through for every key. Be explicit — and use alphas
+    // strong enough to actually see on the github-dark body.
+    // Character-level emphasis (what changed inside the line).
+    "diffEditor.insertedTextBackground": "#10b98155",
+    "diffEditor.removedTextBackground": "#ef444455",
+    // Line-level wash (whole row tinted).
+    "diffEditor.insertedLineBackground": "#10b98122",
+    "diffEditor.removedLineBackground": "#ef444422",
+    "diffEditorGutter.insertedLineBackground": "#10b98144",
+    "diffEditorGutter.removedLineBackground": "#ef444444",
+    // Overview ruler ticks on the right-hand scrollbar.
+    "diffEditorOverview.insertedForeground": "#10b981cc",
+    "diffEditorOverview.removedForeground": "#ef4444cc",
+    // Borders + diagonal fill for empty regions.
     "diffEditor.border": "#30363d",
+    "diffEditor.diagonalFill": "#30363d55",
   },
 });
 

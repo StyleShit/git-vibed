@@ -293,9 +293,8 @@ export function MergeEditor() {
             : "merge-line-conflict-ours-bg";
         const glyph = glyphClassFor(oDec[i] ?? null);
         oursDecos.push({
-          range: new monaco.Range(oursLine + i, 1, oursLine + i, 1),
+          range: new monaco.Range(oursLine + i, 1, oursLine + i, 999999),
           options: {
-            isWholeLine: true,
             className: bg,
             glyphMarginClassName: glyph,
           },
@@ -309,9 +308,8 @@ export function MergeEditor() {
             : "merge-line-conflict-theirs-bg";
         const glyph = glyphClassFor(tDec[i] ?? null);
         theirsDecos.push({
-          range: new monaco.Range(theirsLine + i, 1, theirsLine + i, 1),
+          range: new monaco.Range(theirsLine + i, 1, theirsLine + i, 999999),
           options: {
-            isWholeLine: true,
             className: bg,
             glyphMarginClassName: glyph,
           },
@@ -1032,6 +1030,15 @@ function ConflictChoicePanel({
     ...previewOptions,
     renderSideBySide: true,
     originalEditable: false,
+    // Gutter markers (±) that Monaco draws next to changed lines —
+    // without this the diff reads as two files scrolled side by
+    // side with no visual cue that anything differs. Also disable
+    // the "unchanged regions" collapser which can hide the very
+    // lines the user wants to compare, and the auto-inline
+    // fallback that kicks in on narrow viewports.
+    renderIndicators: true,
+    hideUnchangedRegions: { enabled: false },
+    useInlineViewWhenSpaceIsLimited: false,
   };
 
   return (
