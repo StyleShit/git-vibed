@@ -1138,21 +1138,30 @@ function MergeToolbar({
   return (
     <div className="flex h-11 shrink-0 items-center gap-1 border-b border-neutral-800 bg-neutral-925 px-2">
       {specialActions ? (
+        // Choice-panel mode: no text-merge actions on the left and no
+        // prev/next nav (the current file has a single decision, not a
+        // list of chunks to walk). Resolution buttons live on the right
+        // in the slot "Mark resolved" normally occupies.
         <>
-          {specialActions.map((a) => (
-            <button
-              key={a.choice}
-              onClick={() => onSpecialAction(a.choice)}
-              title={a.hint}
-              className={`rounded-md border px-3 py-1.5 text-sm font-medium transition ${
-                a.danger
-                  ? "border-red-500/30 text-red-200 hover:bg-red-500/10"
-                  : "border-neutral-700 text-neutral-100 hover:border-indigo-500/40 hover:bg-indigo-500/10"
-              }`}
-            >
-              {a.label}
-            </button>
-          ))}
+          <div className="ml-auto flex items-center gap-2">
+            {specialActions.map((a) => (
+              <button
+                key={a.choice}
+                onClick={() => onSpecialAction(a.choice)}
+                title={a.hint}
+                className={`rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+                  a.danger
+                    ? "border-red-500/30 text-red-200 hover:bg-red-500/10"
+                    : "border-neutral-700 text-neutral-100 hover:border-indigo-500/40 hover:bg-indigo-500/10"
+                }`}
+              >
+                {a.label}
+              </button>
+            ))}
+            <ToolbarIconButton onClick={onClose} title="Close merge editor">
+              <CloseIcon className="size-4" />
+            </ToolbarIconButton>
+          </div>
         </>
       ) : (
         <>
@@ -1172,39 +1181,37 @@ function MergeToolbar({
             hint="accept every line on their side, drop every line on ours"
             icon={<ArrowLeftIcon className="size-4" />}
           />
+          <div className="mx-2 h-6 w-px bg-neutral-800" />
+          <ToolbarIconButton onClick={onPrev} title="Previous conflict">
+            <ChevronUpIcon className="size-4" />
+          </ToolbarIconButton>
+          <ToolbarIconButton onClick={onNext} title="Next conflict">
+            <ChevronDownIcon className="size-4" />
+          </ToolbarIconButton>
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-xs text-neutral-400">
+              {unresolved === 0 ? (
+                <span className="text-emerald-400">All resolved</span>
+              ) : (
+                <>
+                  <span className="font-medium text-neutral-200">{unresolved}</span> remaining
+                </>
+              )}
+            </span>
+            <button
+              onClick={onSave}
+              disabled={!canSave}
+              className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <CheckIcon className="size-4" />
+              Mark resolved
+            </button>
+            <ToolbarIconButton onClick={onClose} title="Close merge editor">
+              <CloseIcon className="size-4" />
+            </ToolbarIconButton>
+          </div>
         </>
       )}
-      <div className="mx-2 h-6 w-px bg-neutral-800" />
-      <ToolbarIconButton onClick={onPrev} title="Previous conflict">
-        <ChevronUpIcon className="size-4" />
-      </ToolbarIconButton>
-      <ToolbarIconButton onClick={onNext} title="Next conflict">
-        <ChevronDownIcon className="size-4" />
-      </ToolbarIconButton>
-      <div className="ml-auto flex items-center gap-3">
-        <span className="text-xs text-neutral-400">
-          {unresolved === 0 ? (
-            <span className="text-emerald-400">All resolved</span>
-          ) : (
-            <>
-              <span className="font-medium text-neutral-200">{unresolved}</span> remaining
-            </>
-          )}
-        </span>
-        {!specialActions && (
-          <button
-            onClick={onSave}
-            disabled={!canSave}
-            className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <CheckIcon className="size-4" />
-            Mark resolved
-          </button>
-        )}
-        <ToolbarIconButton onClick={onClose} title="Close merge editor">
-          <CloseIcon className="size-4" />
-        </ToolbarIconButton>
-      </div>
     </div>
   );
 }
