@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMenuPosition } from "../../hooks/useMenuPosition";
 import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
@@ -311,7 +312,7 @@ function FileContextMenu({
   onStash: () => void;
   onDiscard: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const { ref, pos } = useMenuPosition(x, y);
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
@@ -323,7 +324,7 @@ function FileContextMenu({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onEsc);
     };
-  }, [onClose]);
+  }, [onClose, ref]);
 
   const n = paths.length;
   const plural = n === 1 ? "" : "s";
@@ -334,7 +335,7 @@ function FileContextMenu({
       <div
         ref={ref}
         className="fixed z-30 min-w-[220px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-sm shadow-xl"
-        style={{ left: x, top: y }}
+        style={pos}
       >
         <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
           {header}

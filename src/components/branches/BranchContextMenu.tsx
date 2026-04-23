@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Branch } from "@shared/types";
 import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
@@ -6,6 +6,7 @@ import { unwrap } from "../../lib/ipc";
 import { buildCreatePrUrl } from "../../lib/pr-url";
 import { Prompt } from "../ui/Prompt";
 import { useConfirm } from "../ui/Confirm";
+import { useMenuPosition } from "../../hooks/useMenuPosition";
 
 interface Props {
   x: number;
@@ -30,7 +31,7 @@ export function BranchContextMenu({
   onOpenPR,
   onCreateBranch,
 }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
+  const { ref, pos } = useMenuPosition(x, y);
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
   const ghAvailable = useActive("ghAvailable") ?? false;
@@ -214,7 +215,7 @@ export function BranchContextMenu({
       <div
         ref={ref}
         className="fixed z-30 min-w-[200px] rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-xl"
-        style={{ left: x, top: y }}
+        style={pos}
       >
         {!branch.isHead && <Item onClick={checkout}>Checkout</Item>}
         <Item onClick={copyName}>Copy name</Item>

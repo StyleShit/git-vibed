@@ -1,4 +1,5 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { useMenuPosition } from "../../hooks/useMenuPosition";
 import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
@@ -615,7 +616,7 @@ function FolderContextMenu({
   onSetRemoteUrl: () => void;
   onFetchRemote: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const { ref, pos } = useMenuPosition(x, y);
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
@@ -627,14 +628,14 @@ function FolderContextMenu({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onEsc);
     };
-  }, [onClose]);
+  }, [onClose, ref]);
   return (
     <>
       <div className="fixed inset-0 z-20" onClick={onClose} />
       <div
         ref={ref}
         className="fixed z-30 min-w-[220px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-sm shadow-xl"
-        style={{ left: x, top: y }}
+        style={pos}
       >
         <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
           {path}/ ({count})

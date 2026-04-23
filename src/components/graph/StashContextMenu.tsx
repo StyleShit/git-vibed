@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import type { Commit } from "@shared/types";
 import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { useConfirm } from "../ui/Confirm";
+import { useMenuPosition } from "../../hooks/useMenuPosition";
 
 // Context menu shown when the user right-clicks a commit that also
 // happens to be a stash entry (carries a `stash`/`refs/stash`
@@ -22,7 +23,7 @@ export function StashContextMenu({
   commit: Commit;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const { ref, pos } = useMenuPosition(x, y);
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
   const stashes = useActive("stashes") ?? [];
@@ -121,7 +122,7 @@ export function StashContextMenu({
       <div
         ref={ref}
         className="fixed z-30 min-w-[200px] rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-xl"
-        style={{ left: x, top: y }}
+        style={pos}
       >
         <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
           stash · {commit.hash.slice(0, 7)}

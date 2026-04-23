@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMenuPosition } from "../../hooks/useMenuPosition";
 import { createPortal } from "react-dom";
 import { useActive, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
@@ -1064,7 +1065,7 @@ function TagOrStashMenu({
   onCheckout: () => void;
   onCopy: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const { ref, pos } = useMenuPosition(x, y);
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
@@ -1076,14 +1077,14 @@ function TagOrStashMenu({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onEsc);
     };
-  }, [onClose]);
+  }, [onClose, ref]);
   return createPortal(
     <>
       <div className="fixed inset-0 z-50" onClick={onClose} />
       <div
         ref={ref}
         className="gui-menu-in fixed z-50 min-w-[180px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-sm shadow-xl"
-        style={{ left: x, top: y }}
+        style={pos}
       >
         <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
           {refName}

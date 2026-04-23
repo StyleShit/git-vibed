@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Commit } from "@shared/types";
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { useConfirm } from "../ui/Confirm";
 import { TagCreateDialog } from "../tags/TagCreateDialog";
+import { useMenuPosition } from "../../hooks/useMenuPosition";
 
 export function CommitContextMenu({
   x,
@@ -17,7 +18,7 @@ export function CommitContextMenu({
   commit: Commit;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const { ref, pos } = useMenuPosition(x, y);
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
   const confirmDialog = useConfirm();
@@ -101,7 +102,7 @@ export function CommitContextMenu({
       <div
         ref={ref}
         className="fixed z-30 min-w-[180px] rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-xl"
-        style={{ left: x, top: y }}
+        style={pos}
       >
         <Item onClick={checkout}>Checkout this commit</Item>
         <Item onClick={cherryPick}>Cherry-pick</Item>
