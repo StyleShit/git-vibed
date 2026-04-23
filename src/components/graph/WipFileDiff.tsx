@@ -28,16 +28,24 @@ export function WipFileDiff({ path, staged }: { path: string; staged: boolean })
   const lang = useMemo(() => detectLanguage(path), [path]);
 
   useEffect(() => {
-    setDiff(null);
+    // Keep the previous diff visible during the fetch so clicking
+    // through files doesn't flash "Loading diff…" between each pair.
+    // Selection is per-file, so we do clear it — keeping the old
+    // line-selection keys on a different file's hunks would toggle
+    // lines the user never clicked.
     setSelected(new Set());
+    let cancelled = false;
     void (async () => {
       try {
         const d = await unwrap(window.gitApi.diff(path, { staged }));
-        setDiff(d);
+        if (!cancelled) setDiff(d);
       } catch (e) {
-        toast("error", e instanceof Error ? e.message : String(e));
+        if (!cancelled) toast("error", e instanceof Error ? e.message : String(e));
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [path, staged, toast]);
 
   // Click toggles one line; shift-click extends from the last-clicked line

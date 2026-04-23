@@ -19,13 +19,21 @@ export function CommitFileDiff({ hash, path }: { hash: string; path: string }) {
   const lang = useMemo(() => detectLanguage(path), [path]);
 
   useEffect(() => {
-    setDiff(null);
+    // Leave the previous diff on screen while the new one loads —
+    // clearing to null between files caused a "Loading diff…" flash
+    // on every switch. Cancel flag stops a stale response from
+    // landing after a faster newer one.
+    let cancelled = false;
     void (async () => {
       const d = await maybe(
         window.gitApi.diff(path, { commitA: `${hash}^`, commitB: hash }),
       );
+      if (cancelled) return;
       setDiff(d ?? { path, binary: false, hunks: [], raw: "" });
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [hash, path]);
 
   return (

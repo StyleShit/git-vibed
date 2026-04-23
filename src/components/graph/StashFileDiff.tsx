@@ -18,12 +18,20 @@ export function StashFileDiff({ index, path }: { index: number; path: string }) 
   const lang = useMemo(() => detectLanguage(path), [path]);
 
   useEffect(() => {
-    setFile(null);
+    // Leave the previous diff on screen while the new one loads so
+    // rapid file switches don't flash a "Loading diff…" placeholder
+    // between every pair. Cancel flag prevents an older response
+    // from clobbering newer state if the fetches race.
+    let cancelled = false;
     void (async () => {
       const all = await maybe(window.gitApi.stashShowFiles(index));
+      if (cancelled) return;
       const match = all?.find((f) => f.path === path) ?? null;
       setFile(match ?? { path, binary: false, hunks: [], raw: "" });
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [index, path]);
 
   return (

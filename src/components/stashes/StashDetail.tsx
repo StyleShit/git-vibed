@@ -34,10 +34,19 @@ export function StashDetail({ index }: { index: number }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setFiles(null);
-    if (!stash) return;
+    if (!stash) {
+      setFiles(null);
+      return;
+    }
+    // Keep the previous stash's file list on screen until the new one
+    // arrives — eagerly resetting to null caused a "Loading…" flash
+    // every time the user clicked a different stash. A cancelled
+    // flag keeps an older in-flight response from overwriting a
+    // newer stash's data if the user clicks quickly.
+    let cancelled = false;
     void (async () => {
       const res = await maybe(window.gitApi.stashShowFiles(index));
+      if (cancelled) return;
       const list = res ?? [];
       setFiles(list);
       // Jump straight into the first file's diff so the main view
@@ -48,6 +57,9 @@ export function StashDetail({ index }: { index: number }) {
         selectStashFile({ index, path: list[0].path });
       }
     })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, stash]);
 

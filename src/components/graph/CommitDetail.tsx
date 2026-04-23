@@ -46,12 +46,22 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
       setFiles([]);
       return;
     }
-    setLoadingFiles(true);
+    // Keep the previous commit's file list on screen during the
+    // fetch so clicking between commits doesn't flash the loading
+    // state on every switch. Only show the spinner on the initial
+    // load (when we don't have any files yet).
+    setLoadingFiles((prev) => prev || files.length === 0);
+    let cancelled = false;
     void (async () => {
       const res = await maybe(window.gitApi.commitFiles(commit.hash));
+      if (cancelled) return;
       setFiles(res ?? []);
       setLoadingFiles(false);
     })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commit]);
 
   // Link to a PR whose merge commit matches (GitHub writes "Merge pull
