@@ -49,11 +49,15 @@ export function StashDetail({ index }: { index: number }) {
       if (cancelled) return;
       const list = res ?? [];
       setFiles(list);
-      // Jump straight into the first file's diff so the main view
-      // isn't left on the background graph. Only auto-select when
-      // nothing is focused yet, so navigating between stash files
-      // keeps the user's current pick.
-      if (list.length > 0 && !selectedStashFile) {
+      // Auto-select the first file whenever the current selection
+      // doesn't point inside this stash — covers both the initial
+      // land (no selection) and the switch-between-stashes case
+      // (selection left over from the previous stash). Same-stash
+      // file clicks keep the user's manual pick because the index
+      // matches and we fall through without touching it.
+      const selectionInStash =
+        selectedStashFile != null && selectedStashFile.index === index;
+      if (list.length > 0 && !selectionInStash) {
         selectStashFile({ index, path: list[0].path });
       }
     })();

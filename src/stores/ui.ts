@@ -95,13 +95,21 @@ export const useUI = create<UIState>((set, get) => ({
       return { selectedPR, view: "pr-detail" };
     }),
   selectStash: (selectedStash) =>
-    set({
+    set((s) => ({
       selectedStash,
       selectedCommit: null,
       selectedCommitFile: null,
       selectedWipFile: null,
-      selectedStashFile: null,
-    }),
+      // Don't eagerly clear the stash file — keeping the previous one
+      // referenced means StashFileDiff stays mounted with its old
+      // content during the click-to-load gap, and StashDetail's
+      // auto-select swaps in the new stash's first file as soon as
+      // the file list resolves. Clearing to null fell through to the
+      // graph view, which the user saw as a flash on every switch.
+      // When unselecting (null) we do clear, same as before.
+      selectedStashFile:
+        selectedStash == null ? null : s.selectedStashFile,
+    })),
   selectCommitFile: (selectedCommitFile) =>
     set({ selectedCommitFile, selectedWipFile: null, selectedStashFile: null }),
   selectWipFile: (selectedWipFile) =>
