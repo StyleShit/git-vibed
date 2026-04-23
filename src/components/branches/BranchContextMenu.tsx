@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Branch } from "@shared/types";
 import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
@@ -12,6 +12,10 @@ import {
   ghAvailableOptions,
   prsOptions,
 } from "../../queries/gitApi";
+import {
+  branchDeleteMutation,
+  branchSetUpstreamMutation,
+} from "../../queries/mutations";
 import { Prompt } from "../ui/Prompt";
 import { useConfirm } from "../ui/Confirm";
 
@@ -41,6 +45,10 @@ export function BranchContextMenu({
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
   const activePath = useActiveTab()?.path;
+  const branchDeleteMut = useMutation(branchDeleteMutation(activePath ?? ""));
+  const branchSetUpstreamMut = useMutation(
+    branchSetUpstreamMutation(activePath ?? ""),
+  );
   const prStateFilter = useSettings((s) => s.prStateFilter);
   const ghAvailable = useQuery(ghAvailableOptions(activePath)).data ?? false;
   const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
@@ -132,9 +140,8 @@ export function BranchContextMenu({
       return;
     }
     try {
-      await unwrap(window.gitApi.branchSetUpstream(branch.name, target));
+      await branchSetUpstreamMut.mutateAsync({ branch: branch.name, upstream: target });
       toast("success", `Tracking ${target}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -143,9 +150,8 @@ export function BranchContextMenu({
 
   async function clearUpstream() {
     try {
-      await unwrap(window.gitApi.branchSetUpstream(branch.name, null));
+      await branchSetUpstreamMut.mutateAsync({ branch: branch.name, upstream: null });
       toast("success", `Cleared tracking on ${branch.name}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -189,9 +195,8 @@ export function BranchContextMenu({
     });
     if (!ok) return;
     try {
-      await unwrap(window.gitApi.branchDelete(branch.name, true));
+      await branchDeleteMut.mutateAsync({ name: branch.name, force: true });
       toast("success", `Deleted ${branch.name}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }

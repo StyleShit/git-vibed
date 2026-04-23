@@ -298,3 +298,84 @@ export function worktreeUnlockMutation(
     onSuccess: () => invalidate([gitWorktreesOptions(path).queryKey]),
   };
 }
+
+// --- Branches ------------------------------------------------------------
+
+interface BranchCreateInput {
+  name: string;
+  base?: string;
+}
+
+interface BranchRenameInput {
+  oldName: string;
+  newName: string;
+}
+
+interface BranchDeleteInput {
+  name: string;
+  force?: boolean;
+}
+
+interface BranchSetUpstreamInput {
+  branch: string;
+  upstream: string | null;
+}
+
+function afterBranchIdentityChange(path: string) {
+  // Create / rename / delete / upstream all change the ref namespace.
+  // Log can change (new branch tip, or a detached-head commit now lives
+  // under a ref name); status includes the current branch name.
+  invalidate([
+    gitBranchesOptions(path).queryKey,
+    gitLogOptions(path).queryKey,
+    gitStatusOptions(path).queryKey,
+  ]);
+}
+
+export function branchCreateMutation(
+  path: string,
+): UseMutationOptions<void, Error, BranchCreateInput> {
+  return {
+    mutationFn: async ({ name, base }) => {
+      await unwrap(window.gitApi.branchCreate(name, base));
+    },
+    onSuccess: () => afterBranchIdentityChange(path),
+  };
+}
+
+export function branchRenameMutation(
+  path: string,
+): UseMutationOptions<void, Error, BranchRenameInput> {
+  return {
+    mutationFn: async ({ oldName, newName }) => {
+      await unwrap(window.gitApi.branchRename(oldName, newName));
+    },
+    onSuccess: () => afterBranchIdentityChange(path),
+  };
+}
+
+export function branchDeleteMutation(
+  path: string,
+): UseMutationOptions<void, Error, BranchDeleteInput> {
+  return {
+    mutationFn: async ({ name, force }) => {
+      await unwrap(window.gitApi.branchDelete(name, force));
+    },
+    onSuccess: () => afterBranchIdentityChange(path),
+  };
+}
+
+export function branchSetUpstreamMutation(
+  path: string,
+): UseMutationOptions<void, Error, BranchSetUpstreamInput> {
+  return {
+    mutationFn: async ({ branch, upstream }) => {
+      await unwrap(window.gitApi.branchSetUpstream(branch, upstream));
+    },
+    onSuccess: () =>
+      invalidate([
+        gitBranchesOptions(path).queryKey,
+        gitStatusOptions(path).queryKey,
+      ]),
+  };
+}

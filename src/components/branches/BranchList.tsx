@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
@@ -9,6 +9,10 @@ import {
   gitBranchesOptions,
   gitRemotesOptions,
 } from "../../queries/gitApi";
+import {
+  branchDeleteMutation,
+  branchRenameMutation,
+} from "../../queries/mutations";
 import type { Branch } from "@shared/types";
 import { BranchContextMenu } from "./BranchContextMenu";
 import { BranchCreateDialog } from "./BranchCreateDialog";
@@ -49,6 +53,8 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
   const activePath = useActiveTab()?.path;
   const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
   const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
+  const branchRenameMut = useMutation(branchRenameMutation(activePath ?? ""));
+  const branchDeleteMut = useMutation(branchDeleteMutation(activePath ?? ""));
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);
@@ -117,9 +123,8 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
     setRenaming(null);
     if (!target || newName === target.name) return;
     try {
-      await unwrap(window.gitApi.branchRename(target.name, newName));
+      await branchRenameMut.mutateAsync({ oldName: target.name, newName });
       toast("success", `Renamed to ${newName}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -195,12 +200,11 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
     const errors: string[] = [];
     for (const b of targets) {
       try {
-        await unwrap(window.gitApi.branchDelete(b.name, true));
+        await branchDeleteMut.mutateAsync({ name: b.name, force: true });
       } catch (e) {
         errors.push(`${b.name}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    await refreshAll();
     if (errors.length === 0) {
       toast("success", `Deleted ${targets.length} branches`);
     } else {

@@ -3,9 +3,11 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
 import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 import { gitBranchesOptions } from "../../queries/gitApi";
-import { worktreeAddMutation } from "../../queries/mutations";
+import {
+  branchCreateMutation,
+  worktreeAddMutation,
+} from "../../queries/mutations";
 
 // Create a new git worktree at a user-picked filesystem path. Two modes:
 //   - checkout an existing branch (local or remote)
@@ -19,6 +21,7 @@ export function WorktreeAddDialog({ onClose }: { onClose: () => void }) {
   const repoPath = activeTab?.path ?? null;
   const branches = useQuery(gitBranchesOptions(repoPath)).data ?? [];
   const worktreeAddMut = useMutation(worktreeAddMutation(repoPath ?? ""));
+  const branchCreateMut = useMutation(branchCreateMutation(repoPath ?? ""));
   const toast = useUI((s) => s.toast);
 
   const [mode, setMode] = useState<"existing" | "new">("existing");
@@ -75,7 +78,7 @@ export function WorktreeAddDialog({ onClose }: { onClose: () => void }) {
         // form whose argv ordering has changed subtly between git
         // versions and keeps the rollback story simple (if the
         // worktree add fails we still have a clean new branch).
-        await unwrap(window.gitApi.branchCreate(name, newBranchBase));
+        await branchCreateMut.mutateAsync({ name, base: newBranchBase });
         await worktreeAddMut.mutateAsync({
           path: effectivePath,
           branch: name,

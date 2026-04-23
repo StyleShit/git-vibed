@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
 import { createPortal } from "react-dom";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { useActiveTab, useRepo } from "../../stores/repo";
 import {
   gitBranchesOptions,
@@ -9,6 +9,7 @@ import {
   gitRemotesOptions,
   gitStatusOptions,
 } from "../../queries/gitApi";
+import { branchRenameMutation } from "../../queries/mutations";
 import { useUI } from "../../stores/ui";
 import type { GraphColumns } from "../../stores/settings";
 import { layoutCommits, type GraphLayout } from "../../lib/graph-layout";
@@ -984,6 +985,8 @@ function RefBranchMenuHost({
   const [prHead, setPrHead] = useState<string | null>(null);
   const [createFromBase, setCreateFromBase] = useState<string | null>(null);
   const refreshAll = useRepo((s) => s.refreshAll);
+  const activePath = useActiveTab()?.path;
+  const branchRenameMut = useMutation(branchRenameMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);
 
@@ -1018,9 +1021,8 @@ function RefBranchMenuHost({
     setRenaming(null);
     if (!target || newName === target.name) return;
     try {
-      await unwrap(window.gitApi.branchRename(target.name, newName));
+      await branchRenameMut.mutateAsync({ oldName: target.name, newName });
       toast("success", `Renamed to ${newName}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }

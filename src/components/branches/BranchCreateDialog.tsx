@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
 import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
@@ -8,6 +8,7 @@ import {
   gitBranchesOptions,
   gitStatusOptions,
 } from "../../queries/gitApi";
+import { branchCreateMutation } from "../../queries/mutations";
 
 export function BranchCreateDialog({
   onClose,
@@ -19,6 +20,7 @@ export function BranchCreateDialog({
   const activePath = useActiveTab()?.path;
   const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
   const status = useQuery(gitStatusOptions(activePath)).data ?? null;
+  const branchCreateMut = useMutation(branchCreateMutation(activePath ?? ""));
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const [name, setName] = useState("");
@@ -30,15 +32,14 @@ export function BranchCreateDialog({
     if (!name.trim()) return;
     setBusy(true);
     try {
+      await branchCreateMut.mutateAsync({ name: name.trim(), base });
       if (checkout) {
-        // One shot: create + switch. Lightweight — simpler than two IPC calls.
-        await unwrap(window.gitApi.branchCreate(name.trim(), base));
+        // Checkout migrates in D.7. Keep the old unwrap+refreshAll
+        // pair so HEAD + status flow everywhere until then.
         await unwrap(window.gitApi.checkout(name.trim()));
-      } else {
-        await unwrap(window.gitApi.branchCreate(name.trim(), base));
+        await refreshAll();
       }
       toast("success", `Created ${name.trim()}`);
-      await refreshAll();
       onClose();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
