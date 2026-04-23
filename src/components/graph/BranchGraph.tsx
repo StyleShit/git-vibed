@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useActive, useRepo } from "../../stores/repo";
-import { useUI, type GraphColumns } from "../../stores/ui";
+import { useUI } from "../../stores/ui";
+import type { GraphColumns } from "../../stores/settings";
 import { layoutCommits, type GraphLayout } from "../../lib/graph-layout";
 import { CommitDetail } from "./CommitDetail";
 import { CommitContextMenu } from "./CommitContextMenu";
@@ -50,15 +51,40 @@ export function BranchGraph() {
   const selected = useUI((s) => s.selectedCommit);
   const selectedStash = useUI((s) => s.selectedStash);
   const selectCommit = useUI((s) => s.selectCommit);
+  const selectCommitFile = useUI((s) => s.selectCommitFile);
+  const selectWipFile = useUI((s) => s.selectWipFile);
   const selectedCommitFile = useUI((s) => s.selectedCommitFile);
   const selectedWipFile = useUI((s) => s.selectedWipFile);
   const selectedStashFile = useUI((s) => s.selectedStashFile);
   const [menu, setMenu] = useState<{ x: number; y: number; commit: Commit } | null>(null);
   const setView = useUI((s) => s.setView);
-  const columns = useUI((s) => s.graphColumns);
+  const columns = useSettings((s) => s.graphColumns);
   const hoveredBranch = useUI((s) => s.hoveredBranch);
   const inspectorWidth = useSettings((s) => s.inspectorWidth);
   const setInspectorWidth = useSettings((s) => s.setInspectorWidth);
+
+  // After a refresh, the previously-selected commit may be gone (e.g. it
+  // got squashed by a rebase, dropped by a reset, or otherwise rewritten).
+  // Clear the selection so the right pane falls back to the changes view
+  // instead of sticking on a detail panel for a missing hash.
+  useEffect(() => {
+    if (selected && !commits.some((c) => c.hash === selected)) {
+      selectCommit(null);
+    }
+    if (selectedCommitFile && !commits.some((c) => c.hash === selectedCommitFile.hash)) {
+      selectCommitFile(null);
+    }
+  }, [commits, selected, selectedCommitFile, selectCommit, selectCommitFile]);
+
+  // Same idea for WIP file diffs: once a file leaves the staged/unstaged
+  // list (staged, discarded, committed), close the diff so the user sees
+  // the graph or changes panel rather than an empty frame.
+  useEffect(() => {
+    if (!selectedWipFile || !status) return;
+    const pool = selectedWipFile.staged ? status.staged : status.unstaged;
+    const stillThere = pool.some((f) => f.path === selectedWipFile.path);
+    if (!stillThere) selectWipFile(null);
+  }, [status, selectedWipFile, selectWipFile]);
 
   const layout = useMemo(() => layoutCommits(commits), [commits]);
   const graphColumnWidth = Math.max(
@@ -175,7 +201,7 @@ function ColumnHeaders({
   columns: GraphColumns;
 }) {
   const [gearOpen, setGearOpen] = useState(false);
-  const setGraphColumn = useUI((s) => s.setGraphColumn);
+  const setGraphColumn = useSettings((s) => s.setGraphColumn);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -936,12 +962,33 @@ function RefBranchMenuHost({
   const [createFromBase, setCreateFromBase] = useState<string | null>(null);
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
+  const setView = useUI((s) => s.setView);
 
   useEffect(() => {
     if (!menuOpen && !mergeDialog && !renaming && !prHead && !createFromBase) {
       onClose();
     }
   }, [menuOpen, mergeDialog, renaming, prHead, createFromBase, onClose]);
+
+  // Merge runs immediately (no confirmation dialog) — it's reversible via
+  // `merge --abort` until committed, and any prompt adds friction to the
+  // common case. Rebase still goes through the dialog because it rewrites
+  // history and is harder to undo.
+  async function runMerge(source: string) {
+    setMenuOpen(false);
+    try {
+      const result = await unwrap(window.gitApi.merge(source));
+      if (result.conflicts.length > 0) {
+        toast("info", `Conflicts in ${result.conflicts.length} file(s)`);
+        setView("merge");
+      } else {
+        toast("success", `Merged ${source}`);
+      }
+      await refreshAll();
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function handleRename(newName: string) {
     const target = renaming;
@@ -964,7 +1011,7 @@ function RefBranchMenuHost({
           y={y}
           branch={branch}
           onClose={() => setMenuOpen(false)}
-          onMerge={(src) => setMergeDialog({ kind: "merge", source: src })}
+          onMerge={(src) => void runMerge(src)}
           onRebase={(src) => setMergeDialog({ kind: "rebase", source: src })}
           onRename={(b) => setRenaming(b)}
           onOpenPR={(b) => setPrHead(b.name)}

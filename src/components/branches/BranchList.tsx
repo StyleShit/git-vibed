@@ -44,6 +44,7 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
   const remotes = useActive("remotes") ?? [];
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
+  const setView = useUI((s) => s.setView);
   const confirmDialog = useConfirm();
   const collapsedMap = useSettings((s) => s.collapsedBranchFolders);
   const setCollapsedFolders = useSettings((s) => s.setCollapsedBranchFolders);
@@ -260,7 +261,21 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
           y={menu.y}
           branch={menu.branch}
           onClose={() => setMenu(null)}
-          onMerge={(src) => setMergeDialog({ kind: "merge", source: src })}
+          onMerge={async (src) => {
+            setMenu(null);
+            try {
+              const result = await unwrap(window.gitApi.merge(src));
+              if (result.conflicts.length > 0) {
+                toast("info", `Conflicts in ${result.conflicts.length} file(s)`);
+                setView("merge");
+              } else {
+                toast("success", `Merged ${src}`);
+              }
+              await refreshAll();
+            } catch (e) {
+              toast("error", e instanceof Error ? e.message : String(e));
+            }
+          }}
           onRebase={(src) => setMergeDialog({ kind: "rebase", source: src })}
           onRename={(b) => setRenaming(b)}
           onOpenPR={(b) => setPrHead(b.name)}
