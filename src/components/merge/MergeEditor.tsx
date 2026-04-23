@@ -560,6 +560,19 @@ export function MergeEditor() {
 
   const needsPrompt =
     conflictKind !== null && conflictKind !== "both-modified";
+  // The "both modified" text-merge actions (All ours / All theirs /
+  // Mark resolved) don't apply when the file is a delete/rename/both-
+  // added. Swap them for the choice-panel actions so the toolbar
+  // always reflects what the visible content actually supports.
+  const specialActions = needsPrompt
+    ? resolutionActionsFor({
+        kind: conflictKind as SpecialConflictKind,
+        file,
+        oursBranch,
+        theirsBranch,
+        renameInfo,
+      })
+    : null;
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -572,10 +585,12 @@ export function MergeEditor() {
         onSave={saveAndMarkResolved}
         onClose={onClose}
         canSave={!loading && !needsPrompt}
+        specialActions={specialActions}
+        onSpecialAction={resolveSpecial}
       />
       {needsPrompt ? (
         <ConflictChoicePanel
-          kind={conflictKind!}
+          kind={conflictKind as SpecialConflictKind}
           file={file}
           oursBranch={oursBranch}
           theirsBranch={theirsBranch}
@@ -584,7 +599,6 @@ export function MergeEditor() {
           theirs={theirs}
           renameInfo={renameInfo}
           language={language}
-          onResolve={resolveSpecial}
         />
       ) : (
       <div
@@ -697,6 +711,132 @@ export function MergeEditor() {
 // collapse to a small set of choices — take a side, or drop the file.
 // A side-by-side diff (or single-file view) is embedded so the user
 // can actually look at the content before deciding.
+type SpecialConflictKind =
+  | "deleted-by-us"
+  | "deleted-by-them"
+  | "both-added"
+  | "ours-only"
+  | "theirs-only"
+  | "unknown";
+
+export interface ResolutionAction {
+  choice: "keep-ours" | "keep-theirs" | "delete";
+  label: string;
+  hint: string;
+  danger?: boolean;
+}
+
+// Centralized action list so the merge toolbar and the choice panel
+// can stay in sync. Defined at module scope so it's not re-derived on
+// every render and so the toolbar can call it without going through
+// the panel component.
+function resolutionActionsFor(params: {
+  kind: SpecialConflictKind;
+  file: string;
+  oursBranch: string;
+  theirsBranch: string;
+  renameInfo: { newPath: string; newContent: string } | null;
+}): ResolutionAction[] {
+  const { kind, file, oursBranch, theirsBranch, renameInfo } = params;
+  const renamedOnTheirs = !!renameInfo && kind === "deleted-by-them";
+  const renamedOnOurs = !!renameInfo && kind === "deleted-by-us";
+  switch (kind) {
+    case "deleted-by-us":
+      if (renamedOnOurs && renameInfo) {
+        return [
+          {
+            choice: "keep-theirs",
+            label: `Keep the old path (${theirsBranch})`,
+            hint: `Restore ${file} and drop the rename we made to ${renameInfo.newPath}.`,
+          },
+          {
+            choice: "delete",
+            label: `Accept the rename to ${renameInfo.newPath}`,
+            hint: `Keep our rename; this path is removed and the renamed file stays.`,
+            danger: true,
+          },
+        ];
+      }
+      return [
+        {
+          choice: "keep-theirs",
+          label: `Keep the version from ${theirsBranch}`,
+          hint: "Restore the file with the changes from the branch being merged in.",
+        },
+        {
+          choice: "delete",
+          label: "Keep the deletion",
+          hint: "Discard the incoming changes and leave the file deleted.",
+          danger: true,
+        },
+      ];
+    case "deleted-by-them":
+      if (renamedOnTheirs && renameInfo) {
+        return [
+          {
+            choice: "keep-ours",
+            label: `Keep our version at ${file}`,
+            hint: `Block the rename; your changes stay at the original path.`,
+          },
+          {
+            choice: "delete",
+            label: `Accept the rename to ${renameInfo.newPath}`,
+            hint: `Remove ${file}; the renamed version on ${theirsBranch} is used instead.`,
+            danger: true,
+          },
+        ];
+      }
+      return [
+        {
+          choice: "keep-ours",
+          label: `Keep our version (${oursBranch})`,
+          hint: "Restore the file and drop the deletion from the incoming branch.",
+        },
+        {
+          choice: "delete",
+          label: "Accept the deletion",
+          hint: "Remove the file as the incoming branch intended.",
+          danger: true,
+        },
+      ];
+    case "both-added":
+      return [
+        {
+          choice: "keep-ours",
+          label: `Take our version (${oursBranch})`,
+          hint: "Replace the file with the contents from our branch.",
+        },
+        {
+          choice: "keep-theirs",
+          label: `Take their version (${theirsBranch})`,
+          hint: "Replace the file with the contents from the branch being merged in.",
+        },
+      ];
+    case "ours-only":
+    case "theirs-only":
+    case "unknown":
+    default:
+      return [
+        {
+          choice: "keep-ours",
+          label: `Keep our version (${oursBranch})`,
+          hint: "Use the content from our branch and mark resolved.",
+        },
+        {
+          choice: "keep-theirs",
+          label: `Keep their version (${theirsBranch})`,
+          hint: "Use the content from the branch being merged in.",
+        },
+        {
+          choice: "delete",
+          label: "Remove the file",
+          hint: "Delete the file entirely as the resolution.",
+          danger: true,
+        },
+      ];
+  }
+}
+
 function ConflictChoicePanel({
   kind,
   file,
@@ -707,15 +847,8 @@ function ConflictChoicePanel({
   theirs,
   renameInfo,
   language,
-  onResolve,
 }: {
-  kind:
-    | "deleted-by-us"
-    | "deleted-by-them"
-    | "both-added"
-    | "ours-only"
-    | "theirs-only"
-    | "unknown";
+  kind: SpecialConflictKind;
   file: string;
   oursBranch: string;
   theirsBranch: string;
@@ -724,117 +857,9 @@ function ConflictChoicePanel({
   theirs: string;
   renameInfo: { newPath: string; newContent: string } | null;
   language: string;
-  onResolve: (choice: "keep-ours" | "keep-theirs" | "delete") => void;
 }) {
-  // A detected rename reframes a "deleted" classification — the file
-  // didn't disappear, it moved. We surface that with different copy
-  // (summary text + action labels) but reuse the same action choices
-  // underneath (the git commands don't change; only the framing does).
   const renamedOnTheirs = !!renameInfo && kind === "deleted-by-them";
   const renamedOnOurs = !!renameInfo && kind === "deleted-by-us";
-  type Action = {
-    choice: "keep-ours" | "keep-theirs" | "delete";
-    label: string;
-    hint: string;
-    danger?: boolean;
-  };
-  const actions: Action[] = (() => {
-    switch (kind) {
-      case "deleted-by-us":
-        if (renamedOnOurs && renameInfo) {
-          return [
-            {
-              choice: "keep-theirs",
-              label: `Keep the old path (${theirsBranch})`,
-              hint: `Restore ${file} and drop the rename we made to ${renameInfo.newPath}.`,
-            },
-            {
-              choice: "delete",
-              label: `Accept the rename to ${renameInfo.newPath}`,
-              hint: `Keep our rename; this path is removed and the renamed file stays.`,
-              danger: true,
-            },
-          ];
-        }
-        return [
-          {
-            choice: "keep-theirs",
-            label: `Keep the version from ${theirsBranch}`,
-            hint: "Restore the file with the changes from the branch being merged in.",
-          },
-          {
-            choice: "delete",
-            label: "Keep the deletion",
-            hint: "Discard the incoming changes and leave the file deleted.",
-            danger: true,
-          },
-        ];
-      case "deleted-by-them":
-        if (renamedOnTheirs && renameInfo) {
-          return [
-            {
-              choice: "keep-ours",
-              label: `Keep our version at ${file}`,
-              hint: `Block the rename; your changes stay at the original path.`,
-            },
-            {
-              choice: "delete",
-              label: `Accept the rename to ${renameInfo.newPath}`,
-              hint: `Remove ${file}; the renamed version on ${theirsBranch} is used instead.`,
-              danger: true,
-            },
-          ];
-        }
-        return [
-          {
-            choice: "keep-ours",
-            label: `Keep our version (${oursBranch})`,
-            hint: "Restore the file and drop the deletion from the incoming branch.",
-          },
-          {
-            choice: "delete",
-            label: "Accept the deletion",
-            hint: "Remove the file as the incoming branch intended.",
-            danger: true,
-          },
-        ];
-      case "both-added":
-        return [
-          {
-            choice: "keep-ours",
-            label: `Take our version (${oursBranch})`,
-            hint: "Replace the file with the contents from our branch.",
-          },
-          {
-            choice: "keep-theirs",
-            label: `Take their version (${theirsBranch})`,
-            hint: "Replace the file with the contents from the branch being merged in.",
-          },
-        ];
-      case "ours-only":
-      case "theirs-only":
-      case "unknown":
-      default:
-        return [
-          {
-            choice: "keep-ours",
-            label: `Keep our version (${oursBranch})`,
-            hint: "Use the content from our branch and mark resolved.",
-          },
-          {
-            choice: "keep-theirs",
-            label: `Keep their version (${theirsBranch})`,
-            hint: "Use the content from the branch being merged in.",
-          },
-          {
-            choice: "delete",
-            label: "Remove the file",
-            hint: "Delete the file entirely as the resolution.",
-            danger: true,
-          },
-        ];
-    }
-  })();
 
   const summary = (() => {
     if (renamedOnTheirs && renameInfo) {
@@ -988,23 +1013,6 @@ function ConflictChoicePanel({
           </div>
         </div>
       )}
-
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-neutral-800 bg-neutral-925 px-4 py-3">
-        {actions.map((a) => (
-          <button
-            key={a.choice}
-            onClick={() => onResolve(a.choice)}
-            title={a.hint}
-            className={`rounded-md border px-3 py-1.5 text-sm font-medium transition ${
-              a.danger
-                ? "border-red-500/30 text-red-200 hover:bg-red-500/10"
-                : "border-neutral-700 text-neutral-100 hover:border-indigo-500/40 hover:bg-indigo-500/10"
-            }`}
-          >
-            {a.label}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -1110,6 +1118,8 @@ function MergeToolbar({
   onSave,
   onClose,
   canSave,
+  specialActions,
+  onSpecialAction,
 }: {
   unresolved: number;
   onAcceptOurs: () => void;
@@ -1119,25 +1129,51 @@ function MergeToolbar({
   onSave: () => void;
   onClose: () => void;
   canSave: boolean;
+  // When the current file is a delete/rename/both-added case, these
+  // replace "All ours" / "All theirs" / "Mark resolved" — the text-
+  // merge actions wouldn't do anything sensible there.
+  specialActions: ResolutionAction[] | null;
+  onSpecialAction: (choice: "keep-ours" | "keep-theirs" | "delete") => void;
 }) {
   return (
     <div className="flex h-11 shrink-0 items-center gap-1 border-b border-neutral-800 bg-neutral-925 px-2">
-      {/* Arrow direction reflects where the content is going: for "All
-          ours" we're pulling from the left-hand Ours pane into the
-          center Result pane, so the arrow points right. Same logic,
-          mirrored, for "All theirs". */}
-      <ToolbarButton
-        onClick={onAcceptOurs}
-        label="All ours"
-        hint="accept every line on our side, drop every line on theirs"
-        icon={<ArrowRightIcon className="size-4" />}
-      />
-      <ToolbarButton
-        onClick={onAcceptTheirs}
-        label="All theirs"
-        hint="accept every line on their side, drop every line on ours"
-        icon={<ArrowLeftIcon className="size-4" />}
-      />
+      {specialActions ? (
+        <>
+          {specialActions.map((a) => (
+            <button
+              key={a.choice}
+              onClick={() => onSpecialAction(a.choice)}
+              title={a.hint}
+              className={`rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+                a.danger
+                  ? "border-red-500/30 text-red-200 hover:bg-red-500/10"
+                  : "border-neutral-700 text-neutral-100 hover:border-indigo-500/40 hover:bg-indigo-500/10"
+              }`}
+            >
+              {a.label}
+            </button>
+          ))}
+        </>
+      ) : (
+        <>
+          {/* Arrow direction reflects where the content is going: for
+              "All ours" we're pulling from the left-hand Ours pane into
+              the center Result pane, so the arrow points right. Same
+              logic, mirrored, for "All theirs". */}
+          <ToolbarButton
+            onClick={onAcceptOurs}
+            label="All ours"
+            hint="accept every line on our side, drop every line on theirs"
+            icon={<ArrowRightIcon className="size-4" />}
+          />
+          <ToolbarButton
+            onClick={onAcceptTheirs}
+            label="All theirs"
+            hint="accept every line on their side, drop every line on ours"
+            icon={<ArrowLeftIcon className="size-4" />}
+          />
+        </>
+      )}
       <div className="mx-2 h-6 w-px bg-neutral-800" />
       <ToolbarIconButton onClick={onPrev} title="Previous conflict">
         <ChevronUpIcon className="size-4" />
@@ -1155,14 +1191,16 @@ function MergeToolbar({
             </>
           )}
         </span>
-        <button
-          onClick={onSave}
-          disabled={!canSave}
-          className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <CheckIcon className="size-4" />
-          Mark resolved
-        </button>
+        {!specialActions && (
+          <button
+            onClick={onSave}
+            disabled={!canSave}
+            className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <CheckIcon className="size-4" />
+            Mark resolved
+          </button>
+        )}
         <ToolbarIconButton onClick={onClose} title="Close merge editor">
           <CloseIcon className="size-4" />
         </ToolbarIconButton>
