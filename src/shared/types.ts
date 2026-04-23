@@ -72,6 +72,10 @@ export interface Remote {
 export interface Stash {
   index: number;
   ref: string;
+  // Commit hash the stash points at, so callers (e.g. the graph's right-
+  // click menu) can map a selected commit row back to its stash entry
+  // without relying on reflog ordering.
+  hash: string;
   branch: string | null;
   message: string;
   timestamp: number;
@@ -182,7 +186,6 @@ export interface CommitOptions {
   message: string;
   amend?: boolean;
   noVerify?: boolean;
-  signOff?: boolean;
 }
 
 export interface LogOptions {
@@ -200,6 +203,17 @@ export interface ConfigEntry {
 }
 
 export type MergeMethod = "squash" | "merge" | "rebase";
+
+// Snapshot of HEAD undo/redo availability. `undoLabel` is the reflog
+// subject of whatever `HEAD@{0}` recorded last (the action we'd roll
+// back); `redoLabel` is the stashed reflog subject we captured at the
+// time the user undid it.
+export interface UndoState {
+  canUndo: boolean;
+  canRedo: boolean;
+  undoLabel?: string;
+  redoLabel?: string;
+}
 
 // GitHub types
 export interface PullRequest {
@@ -255,7 +269,15 @@ export interface FetchCompleteEvent {
   repoPath: string;
   behind: number;
   ahead: number;
+  // True when the fetch actually picked up new data (remote refs or tags
+  // changed). The renderer uses this to decide whether to refresh branches,
+  // log, and tags — skipping the reload on a no-op fetch keeps the UI quiet.
+  changed: boolean;
   errors?: string;
+}
+
+export interface FetchStartEvent {
+  repoPath: string;
 }
 
 // Generic result wrapper so renderer can handle errors gracefully.
