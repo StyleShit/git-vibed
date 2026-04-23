@@ -19,6 +19,7 @@ import {
 } from "../ui/Icons";
 import { BranchCreateDialog } from "../branches/BranchCreateDialog";
 import { useConfirm } from "../ui/Confirm";
+import { Tooltip } from "../ui/Tooltip";
 
 type PullStrategy = "merge" | "rebase" | "ff-only";
 
@@ -485,15 +486,16 @@ function ToolbarButton({
 }) {
   const title = titleOverride ?? (hint ? `${label} (${hint})` : label);
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className="flex min-w-[56px] flex-col items-center rounded px-2 py-1 text-[10px] text-neutral-300 transition hover:bg-neutral-800 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      {icon}
-      <span>{label ?? children}</span>
-    </button>
+    <Tooltip content={title}>
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className="flex min-w-[56px] flex-col items-center rounded px-2 py-1 text-[10px] text-neutral-300 transition hover:bg-neutral-800 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {icon}
+        <span>{label ?? children}</span>
+      </button>
+    </Tooltip>
   );
 }
 
@@ -512,14 +514,15 @@ function ToolbarIconButton({
 }) {
   const full = hint ? `${title} (${hint})` : title;
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={full}
-      className="rounded p-1.5 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      {children}
-    </button>
+    <Tooltip content={full}>
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className="rounded p-1.5 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -547,22 +550,23 @@ function SplitButton({
   // edges) produced a visible seam that looked like a rendering bug.
   return (
     <div className="group/split flex items-stretch rounded hover:bg-neutral-800">
-      <button
-        onClick={onClick}
-        disabled={disabled}
-        title={title}
-        className="flex min-w-[56px] flex-col items-center rounded-l px-2 py-1 text-[10px] text-neutral-300 group-hover/split:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <div className="relative">
-          {icon}
-          {badge != null && badge > 0 && (
-            <span className="absolute -right-1.5 -top-1 min-w-3.5 rounded-full bg-indigo-500 px-1 text-[9px] leading-[14px] text-white">
-              {badge}
-            </span>
-          )}
-        </div>
-        <span>{label}</span>
-      </button>
+      <Tooltip content={title}>
+        <button
+          onClick={onClick}
+          disabled={disabled}
+          className="flex min-w-[56px] flex-col items-center rounded-l px-2 py-1 text-[10px] text-neutral-300 group-hover/split:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <div className="relative">
+            {icon}
+            {badge != null && badge > 0 && (
+              <span className="absolute -right-1.5 -top-1 min-w-3.5 rounded-full bg-indigo-500 px-1 text-[9px] leading-[14px] text-white">
+                {badge}
+              </span>
+            )}
+          </div>
+          <span>{label}</span>
+        </button>
+      </Tooltip>
       <Menu.Root modal={false}>
         <Menu.Trigger
           disabled={disabled}

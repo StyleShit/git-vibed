@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { Select } from "@base-ui-components/react/select";
 import { unwrap } from "../../lib/ipc";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
-import { CloseIcon } from "../ui/Icons";
+import { CheckIcon, ChevronDownIcon, CloseIcon } from "../ui/Icons";
 import type { ConfigEntry } from "@shared/types";
 
 const COMMON_SETTINGS: Array<{ key: string; label: string; hint?: string }> = [
@@ -47,40 +48,94 @@ function AppSettings() {
     <section className="mb-8 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
       <h3 className="mb-3 text-sm font-semibold">App</h3>
       <Field label="Theme">
-        <select
+        <SettingSelect
           value={theme}
-          onChange={(e) => setTheme(e.target.value as typeof theme)}
-          className="rounded bg-neutral-800 px-2 py-1 text-sm"
-        >
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-          <option value="system">Follow system</option>
-        </select>
+          onValueChange={setTheme}
+          options={[
+            { value: "dark", label: "Dark" },
+            { value: "light", label: "Light" },
+            { value: "system", label: "Follow system" },
+          ]}
+        />
       </Field>
       <Field label="Auto-fetch interval">
-        <select
+        <SettingSelect
           value={autoFetchIntervalMs}
-          onChange={(e) => setAutoFetchIntervalMs(Number(e.target.value))}
-          className="rounded bg-neutral-800 px-2 py-1 text-sm"
-        >
-          <option value={60_000}>1 minute</option>
-          <option value={5 * 60_000}>5 minutes</option>
-          <option value={15 * 60_000}>15 minutes</option>
-          <option value={60 * 60_000}>1 hour</option>
-        </select>
+          onValueChange={setAutoFetchIntervalMs}
+          options={[
+            { value: 60_000, label: "1 minute" },
+            { value: 5 * 60_000, label: "5 minutes" },
+            { value: 15 * 60_000, label: "15 minutes" },
+            { value: 60 * 60_000, label: "1 hour" },
+          ]}
+        />
       </Field>
       <Field label="Default pull strategy">
-        <select
+        <SettingSelect
           value={defaultPullStrategy}
-          onChange={(e) => setDefaultPullStrategy(e.target.value as typeof defaultPullStrategy)}
-          className="rounded bg-neutral-800 px-2 py-1 text-sm"
-        >
-          <option value="merge">Merge</option>
-          <option value="rebase">Rebase</option>
-          <option value="ff-only">Fast-forward only</option>
-        </select>
+          onValueChange={setDefaultPullStrategy}
+          options={[
+            { value: "merge", label: "Merge" },
+            { value: "rebase", label: "Rebase" },
+            { value: "ff-only", label: "Fast-forward only" },
+          ]}
+        />
       </Field>
     </section>
+  );
+}
+
+function SettingSelect<T extends string | number>({
+  value,
+  onValueChange,
+  options,
+  width = 160,
+}: {
+  value: T;
+  onValueChange: (value: T) => void;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  width?: number;
+}) {
+  return (
+    <Select.Root
+      value={value}
+      onValueChange={(v) => onValueChange(v as T)}
+      items={options}
+    >
+      <Select.Trigger
+        style={{ width }}
+        className="flex items-center justify-between gap-2 rounded bg-neutral-800 px-2 py-1 text-sm outline-none hover:bg-neutral-700 data-[popup-open]:bg-neutral-700"
+      >
+        <Select.Value />
+        <Select.Icon>
+          <ChevronDownIcon className="size-3 text-neutral-400" />
+        </Select.Icon>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Positioner
+          sideOffset={4}
+          className="z-50 outline-none"
+          style={{ minWidth: width }}
+        >
+          <Select.Popup className="max-h-[--available-height] overflow-y-auto rounded-md border border-neutral-800 bg-neutral-900 py-1 text-sm shadow-lg outline-none">
+            {options.map((o) => (
+              <Select.Item
+                key={String(o.value)}
+                value={o.value}
+                className="flex cursor-default items-center gap-2 px-3 py-1.5 outline-none data-[highlighted]:bg-neutral-800"
+              >
+                <span className="flex size-3 items-center justify-center">
+                  <Select.ItemIndicator>
+                    <CheckIcon className="size-3 text-indigo-400" />
+                  </Select.ItemIndicator>
+                </span>
+                <Select.ItemText>{o.label}</Select.ItemText>
+              </Select.Item>
+            ))}
+          </Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
+    </Select.Root>
   );
 }
 
@@ -129,14 +184,15 @@ function GitConfigPanel() {
         <h3 className="text-sm font-semibold">Git config</h3>
         <div className="flex items-center gap-2 text-xs">
           <span className="text-neutral-400">Save to:</span>
-          <select
+          <SettingSelect
             value={scope}
-            onChange={(e) => setScope(e.target.value as typeof scope)}
-            className="rounded bg-neutral-800 px-2 py-1 text-xs"
-          >
-            <option value="local">Local (repo)</option>
-            <option value="global">Global</option>
-          </select>
+            onValueChange={setScope}
+            options={[
+              { value: "local", label: "Local (repo)" },
+              { value: "global", label: "Global" },
+            ]}
+            width={140}
+          />
         </div>
       </div>
       <table className="w-full text-sm">

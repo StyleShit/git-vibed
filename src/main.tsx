@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Toast } from "@base-ui-components/react/toast";
+import { Tooltip } from "@base-ui-components/react/tooltip";
 import "./index.css";
 import "./monaco-setup";
 import { App } from "./App";
@@ -11,9 +12,11 @@ const root = createRoot(document.getElementById("root") as HTMLElement);
 root.render(
   <StrictMode>
     <Toast.Provider toastManager={toastManager}>
-      <ConfirmProvider>
-        <App />
-      </ConfirmProvider>
+      <Tooltip.Provider delay={400}>
+        <ConfirmProvider>
+          <App />
+        </ConfirmProvider>
+      </Tooltip.Provider>
     </Toast.Provider>
   </StrictMode>,
 );
