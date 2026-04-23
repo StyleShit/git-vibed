@@ -14,6 +14,8 @@ import type {
 import { unwrap, maybe } from "../lib/ipc";
 import { useUI } from "./ui";
 import { useSettings } from "./settings";
+import { queryClient } from "../queries/client";
+import { repoKey } from "../queries/gitApi";
 
 // Per-tab data. Each open repository has its own slice, so switching tabs
 // surfaces the other repo's state instantly without re-fetching.
@@ -201,6 +203,10 @@ export const useRepo = create<RepoState>((set, get) => ({
     }));
   },
 
+  // Transition-period bridge: every old-style refreshX mirrors its result
+  // into zustand (for consumers that haven't migrated) AND invalidates the
+  // matching TanStack Query key so queries stay in sync in the same tick.
+  // Once Step E removes the zustand mirror, these methods disappear.
   refreshAll: async (repoPath) => {
     const path = repoPath ?? get().tabs[get().activeIdx]?.path;
     if (!path) return;
@@ -215,6 +221,7 @@ export const useRepo = create<RepoState>((set, get) => ({
       get().refreshWorktrees(path),
       get().refreshUndoState(path),
     ]);
+    queryClient.invalidateQueries({ queryKey: repoKey(path) });
   },
 
   refreshStatus: async (repoPath) => {
@@ -222,6 +229,7 @@ export const useRepo = create<RepoState>((set, get) => ({
     if (!path) return;
     const status = await maybe(window.gitApi.status());
     if (status) get().patchTab(path, { status });
+    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "status"] });
   },
 
   refreshBranches: async (repoPath) => {
@@ -229,6 +237,7 @@ export const useRepo = create<RepoState>((set, get) => ({
     if (!path) return;
     const branches = await maybe(window.gitApi.branches());
     if (branches) get().patchTab(path, { branches });
+    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "branches"] });
   },
 
   refreshLog: async (opts, repoPath) => {
@@ -244,6 +253,7 @@ export const useRepo = create<RepoState>((set, get) => ({
         loadingMoreCommits: false,
       });
     }
+    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "log"] });
   },
 
   loadMoreCommits: async (repoPath) => {
@@ -279,6 +289,7 @@ export const useRepo = create<RepoState>((set, get) => ({
     if (!path) return;
     const remotes = await maybe(window.gitApi.remotes());
     if (remotes) get().patchTab(path, { remotes });
+    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "remotes"] });
   },
 
   refreshPRs: async (repoPath) => {
@@ -287,11 +298,13 @@ export const useRepo = create<RepoState>((set, get) => ({
     const tab = get().tabs.find((t) => t.path === path);
     if (!tab?.ghAvailable) {
       get().patchTab(path, { prs: [] });
+      queryClient.invalidateQueries({ queryKey: [...repoKey(path), "prs"] });
       return;
     }
     const stateFilter = useSettings.getState().prStateFilter;
     const prs = await maybe(window.ghApi.prList(stateFilter));
     get().patchTab(path, { prs: prs ?? [] });
+    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "prs"] });
   },
 
   refreshStashes: async (repoPath) => {
@@ -299,6 +312,7 @@ export const useRepo = create<RepoState>((set, get) => ({
     if (!path) return;
     const stashes = await maybe(window.gitApi.stashList());
     if (stashes) get().patchTab(path, { stashes });
+    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "stashes"] });
   },
 
   refreshTags: async (repoPath) => {
@@ -306,6 +320,7 @@ export const useRepo = create<RepoState>((set, get) => ({
     if (!path) return;
     const tags = await maybe(window.gitApi.tags());
     if (tags) get().patchTab(path, { tags });
+    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "tags"] });
   },
 
   refreshWorktrees: async (repoPath) => {
@@ -313,6 +328,7 @@ export const useRepo = create<RepoState>((set, get) => ({
     if (!path) return;
     const worktrees = await maybe(window.gitApi.worktreeList());
     if (worktrees) get().patchTab(path, { worktrees });
+    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "worktrees"] });
   },
 
   refreshUndoState: async (repoPath) => {
@@ -320,6 +336,7 @@ export const useRepo = create<RepoState>((set, get) => ({
     if (!path) return;
     const undo = await maybe(window.gitApi.undoState());
     if (undo) get().patchTab(path, { undo });
+    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "undo"] });
   },
 
   setBehindRemote: (path, behindRemote) => get().patchTab(path, { behindRemote }),
