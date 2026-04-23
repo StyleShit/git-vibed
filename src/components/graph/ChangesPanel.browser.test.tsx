@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import type { RepoStatus } from "@shared/types";
 import { renderWithRepo } from "../../test/renderWithRepo";
-import { useRepo } from "../../stores/repo";
+import { gitStatusOptions } from "../../queries/gitApi";
 import { ChangesPanel } from "./ChangesPanel";
 
 const REPO = "/repo";
@@ -34,17 +34,21 @@ describe("ChangesPanel — REPO_CHANGED updates the panel", () => {
     const initialStatus = statusWith({ staged: [], unstaged: ["foo.ts"] });
     const afterStage = statusWith({ staged: ["foo.ts"], unstaged: [] });
 
-    renderWithRepo(<ChangesPanel />, {
-      initialTab: { path: REPO, status: initialStatus },
+    // Point the mock at initialStatus before render so the first query
+    // fetch lands the expected state; we flip to afterStage before the
+    // watcher event fires.
+    window.__gitApiMock.stub("status", () => initialStatus);
+
+    const { queryClient } = renderWithRepo(<ChangesPanel />, {
+      initialTab: { path: REPO },
     });
 
-    // Baseline: one change shown, Staged (0), Changes (1).
-    expect(screen.getByText(/^Staged \(0\)$/)).not.toBeNull();
-    expect(screen.getByText(/^Changes \(1\)$/)).not.toBeNull();
+    await waitFor(() => {
+      expect(screen.getByText(/^Staged \(0\)$/)).not.toBeNull();
+      expect(screen.getByText(/^Changes \(1\)$/)).not.toBeNull();
+    });
     expect(screen.getByText("foo.ts")).not.toBeNull();
 
-    // Stub status so the next refresh returns the post-stage state, then
-    // fire the watcher event that the listener forwards to refreshStatus.
     window.__gitApiMock.stub("status", () => afterStage);
     window.__emitRepoChanged({ repoPath: REPO, type: "index" });
 
@@ -53,22 +57,25 @@ describe("ChangesPanel — REPO_CHANGED updates the panel", () => {
       expect(screen.getByText(/^Changes \(0\)$/)).not.toBeNull();
     });
 
-    // Store also reflects the move.
-    const tab = useRepo.getState().tabs[0];
-    expect(tab.status?.staged.map((f) => f.path)).toEqual(["foo.ts"]);
-    expect(tab.status?.unstaged).toEqual([]);
+    const status = queryClient.getQueryData(gitStatusOptions(REPO).queryKey);
+    expect(status?.staged.map((f) => f.path)).toEqual(["foo.ts"]);
+    expect(status?.unstaged).toEqual([]);
   });
 
   it("moves a file from Staged back to Changes after unstage", async () => {
     const initialStatus = statusWith({ staged: ["foo.ts"], unstaged: [] });
     const afterUnstage = statusWith({ staged: [], unstaged: ["foo.ts"] });
 
-    renderWithRepo(<ChangesPanel />, {
-      initialTab: { path: REPO, status: initialStatus },
+    window.__gitApiMock.stub("status", () => initialStatus);
+
+    const { queryClient } = renderWithRepo(<ChangesPanel />, {
+      initialTab: { path: REPO },
     });
 
-    expect(screen.getByText(/^Staged \(1\)$/)).not.toBeNull();
-    expect(screen.getByText(/^Changes \(0\)$/)).not.toBeNull();
+    await waitFor(() => {
+      expect(screen.getByText(/^Staged \(1\)$/)).not.toBeNull();
+      expect(screen.getByText(/^Changes \(0\)$/)).not.toBeNull();
+    });
 
     window.__gitApiMock.stub("status", () => afterUnstage);
     window.__emitRepoChanged({ repoPath: REPO, type: "index" });
@@ -78,8 +85,8 @@ describe("ChangesPanel — REPO_CHANGED updates the panel", () => {
       expect(screen.getByText(/^Changes \(1\)$/)).not.toBeNull();
     });
 
-    const tab = useRepo.getState().tabs[0];
-    expect(tab.status?.staged).toEqual([]);
-    expect(tab.status?.unstaged.map((f) => f.path)).toEqual(["foo.ts"]);
+    const status = queryClient.getQueryData(gitStatusOptions(REPO).queryKey);
+    expect(status?.staged).toEqual([]);
+    expect(status?.unstaged.map((f) => f.path)).toEqual(["foo.ts"]);
   });
 });

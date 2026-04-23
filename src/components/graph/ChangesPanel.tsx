@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
+import { useQuery } from "@tanstack/react-query";
 import { buildTree, type TreeNode } from "../../lib/file-tree";
-import { useRepo, useActiveTabShallow } from "../../stores/repo";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
+import {
+  gitStatusOptions,
+  gitWorktreesOptions,
+} from "../../queries/gitApi";
 import { useConfirm } from "../ui/Confirm";
 import { CommitPanel } from "../commit/CommitPanel";
 import {
@@ -24,11 +29,10 @@ type ViewMode = "path" | "tree";
 // to a diff viewer. Supports multi-select with ctrl/cmd/shift modifiers
 // and a right-click context menu (Stage/Unstage/Stash/Discard).
 export function ChangesPanel() {
-  const { status, worktrees, repoPath } = useActiveTabShallow((t) => ({
-    status: t?.status ?? null,
-    worktrees: t?.worktrees ?? [],
-    repoPath: t?.path ?? "",
-  }));
+  const activeTab = useActiveTab();
+  const repoPath = activeTab?.path ?? "";
+  const status = useQuery(gitStatusOptions(activeTab?.path)).data ?? null;
+  const worktrees = useQuery(gitWorktreesOptions(activeTab?.path)).data ?? [];
   const refreshStatus = useRepo((s) => s.refreshStatus);
   const refreshStashes = useRepo((s) => s.refreshStashes);
   const toast = useUI((s) => s.toast);

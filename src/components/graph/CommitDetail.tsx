@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { useActive } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useActive, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { maybe } from "../../lib/ipc";
+import {
+  gitStatusOptions,
+  ghAvailableOptions,
+  prsOptions,
+} from "../../queries/gitApi";
 import {
   CloseIcon,
   CopyIcon,
@@ -24,9 +30,13 @@ import type { Commit, CommitFile, FileStatus, PullRequest } from "@shared/types"
 // (when head/base matches), files list with status icons and
 // add/remove counts, Path/Tree toggle for the file list.
 export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => void }) {
+  const activePath = useActiveTab()?.path;
+  const prStateFilter = useSettings((s) => s.prStateFilter);
   const commits = useActive("commits") ?? [];
-  const prs = useActive("prs") ?? [];
-  const status = useActive("status");
+  const ghAvailable = useQuery(ghAvailableOptions(activePath)).data ?? false;
+  const prs =
+    useQuery(prsOptions(activePath, prStateFilter, ghAvailable)).data ?? [];
+  const status = useQuery(gitStatusOptions(activePath)).data;
   const toast = useUI((s) => s.toast);
   const [commit, setCommit] = useState<Commit | null>(null);
   const [files, setFiles] = useState<CommitFile[]>([]);

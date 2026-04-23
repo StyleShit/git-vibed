@@ -1,7 +1,9 @@
-import { useRepo, useActive } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import type { FileChange } from "@shared/types";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { gitStatusOptions } from "../../queries/gitApi";
 import { useConfirm } from "../ui/Confirm";
 
 interface Props {
@@ -10,7 +12,8 @@ interface Props {
 }
 
 export function StagingArea({ selected, onSelect }: Props) {
-  const status = useActive("status") ?? null;
+  const activePath = useActiveTab()?.path;
+  const status = useQuery(gitStatusOptions(activePath)).data ?? null;
   const refreshStatus = useRepo((s) => s.refreshStatus);
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();

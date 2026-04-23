@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useRepo, type TabData } from "../stores/repo";
 import { toastManager } from "../stores/ui";
 import { ConfirmProvider } from "../components/ui/Confirm";
+import { RepoEventBridge as QueryRepoEventBridge } from "../queries/RepoEventBridge";
 
 function emptyTab(path: string): TabData {
   return {
@@ -88,6 +89,7 @@ export function renderWithRepo(
   }
   const result = render(
     <QueryClientProvider client={queryClient}>
+      <QueryRepoEventBridge />
       <Toast.Provider toastManager={toastManager}>
         <Tooltip.Provider>
           <ConfirmProvider>
