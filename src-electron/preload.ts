@@ -111,6 +111,7 @@ const gitApi = {
     invoke<string>(GIT.FILE_AT_REF, { ref, path: filePath }),
   writeFile: (filePath: string, content: string) =>
     invoke<void>(GIT.WRITE_FILE, { path: filePath, content }),
+  mergeMessage: () => invoke<string>(GIT.MERGE_MESSAGE),
 
   stashList: () => invoke<Stash[]>(GIT.STASH_LIST),
   stashApply: (index: number) => invoke<void>(GIT.STASH_APPLY, index),

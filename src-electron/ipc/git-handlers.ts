@@ -175,6 +175,7 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
     (_e, { path: p, content }: { path: string; content: string }) =>
       wrap(() => exec(repo).writeFile(p, content)),
   );
+  ipc.handle(GIT.MERGE_MESSAGE, () => wrap(() => exec(repo).mergeMessage()));
 
   ipc.handle(GIT.STASH_LIST, () => wrap(() => exec(repo).stashList()));
   ipc.handle(GIT.STASH_APPLY, (_e, index: number) => wrap(() => exec(repo).stashApply(index)));

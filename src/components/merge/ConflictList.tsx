@@ -21,10 +21,11 @@ export function ConflictList() {
   async function finish() {
     try {
       if (isMerge) {
-        toast("success", "Merge completed");
+        // Merge commit is finished from the regular commit panel (which
+        // pre-fills MERGE_MSG) — here we only leave the editor so the
+        // user sees that panel.
         selectConflictFile(null);
         setView("graph");
-        await refreshAll();
       } else if (isRebase) {
         await unwrap(window.gitApi.rebaseContinue());
         toast("success", "Rebase continued");

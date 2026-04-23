@@ -21,9 +21,21 @@ export function CommitPanel() {
   const [savedMessage, setSavedMessage] = useState<{ subject: string; description: string } | null>(
     null,
   );
+  // Track whether we already pre-filled from MERGE_MSG so we don't clobber
+  // user edits on every status refresh while the merge is still in progress.
+  const [mergeMessagePrefilled, setMergeMessagePrefilled] = useState(false);
 
+  const mergeInProgress = !!status?.mergeInProgress;
+  const conflictsRemaining = (status?.conflicted.length ?? 0) > 0;
   const staged = status?.staged ?? [];
-  const canCommit = !busy && subject.trim().length > 0 && (amend || staged.length > 0);
+  // During a merge, git finalizes the commit even with no staged changes
+  // beyond what it already recorded in MERGE_HEAD, so relax the usual
+  // "needs staged files" guard.
+  const canCommit =
+    !busy &&
+    subject.trim().length > 0 &&
+    !conflictsRemaining &&
+    (amend || mergeInProgress || staged.length > 0);
   const fullMessage = description.trim()
     ? `${subject.trim()}\n\n${description.trim()}`
     : subject.trim();
@@ -74,6 +86,31 @@ export function CommitPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canCommit, subject, description, amend, skipHooks]);
 
+  // Pre-fill the subject/description from .git/MERGE_MSG when a merge
+  // starts. Only runs once per merge (guarded by mergeMessagePrefilled)
+  // so we don't stomp on edits the user makes while resolving conflicts.
+  // Resets when the merge ends so the next one gets a fresh prefill.
+  useEffect(() => {
+    if (!mergeInProgress) {
+      if (mergeMessagePrefilled) setMergeMessagePrefilled(false);
+      return;
+    }
+    if (mergeMessagePrefilled || amend) return;
+    void (async () => {
+      const res = await window.gitApi.mergeMessage();
+      if (!res.ok || !res.data) return;
+      const [first, ...rest] = res.data.split(/\n\n/);
+      // Only prefill if the user hasn't already started typing something,
+      // so their own subject wins over the git-generated one.
+      if (!subject.trim() && !description.trim()) {
+        setSubject(first ?? "");
+        setDescription(rest.join("\n\n"));
+      }
+      setMergeMessagePrefilled(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mergeInProgress, amend]);
+
   async function commit() {
     if (!canCommit) return;
     setBusy(true);
@@ -85,7 +122,10 @@ export function CommitPanel() {
           noVerify: skipHooks,
         }),
       );
-      toast("success", amend ? "Commit amended" : "Committed");
+      toast(
+        "success",
+        mergeInProgress ? "Merge completed" : amend ? "Commit amended" : "Committed",
+      );
       setSubject("");
       setDescription("");
       setAmend(false);
@@ -149,9 +189,20 @@ export function CommitPanel() {
       <button
         onClick={commit}
         disabled={!canCommit}
+        title={
+          conflictsRemaining
+            ? "Resolve all conflicts before continuing the merge"
+            : undefined
+        }
         className="mt-2 w-full rounded-md bg-indigo-600 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {busy ? "Committing…" : amend ? "Commit (Amend)" : "Commit"}
+        {busy
+          ? "Committing…"
+          : mergeInProgress
+            ? "Continue merge"
+            : amend
+              ? "Commit (Amend)"
+              : "Commit"}
       </button>
     </div>
   );

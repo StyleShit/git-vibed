@@ -41,6 +41,7 @@ export const GIT = {
   CONFIG_SET: "git:config-set",
   FILE_AT_REF: "git:file-at-ref",
   WRITE_FILE: "git:write-file",
+  MERGE_MESSAGE: "git:merge-message",
   CHERRY_PICK: "git:cherry-pick",
   REVERT: "git:revert",
   RESET: "git:reset",

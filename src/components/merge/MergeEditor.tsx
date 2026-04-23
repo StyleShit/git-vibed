@@ -26,6 +26,7 @@ import {
   CheckIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  CloseIcon,
   MagicWandIcon,
 } from "../ui/Icons";
 import type { ConflictRegion } from "@shared/types";
@@ -57,6 +58,7 @@ interface ConflictAnchor {
 export function MergeEditor() {
   const file = useUI((s) => s.selectedConflictFile);
   const selectConflictFile = useUI((s) => s.selectConflictFile);
+  const setView = useUI((s) => s.setView);
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
   const confirmDialog = useConfirm();
@@ -394,6 +396,8 @@ export function MergeEditor() {
       if (!ok) return;
     }
     try {
+      // Look up the next file before markResolved fires a refresh —
+      // once the current file leaves `conflicted`, the index shifts.
       const currentIdx = conflicted.findIndex((f) => f.path === file);
       const nextFile = currentIdx >= 0 && currentIdx + 1 < conflicted.length
         ? conflicted[currentIdx + 1].path
@@ -401,13 +405,7 @@ export function MergeEditor() {
 
       await unwrap(window.gitApi.writeFile(file, result));
       await unwrap(window.gitApi.markResolved([file]));
-      const fileName = file.split(/[\\/]/).pop() ?? file;
-      await unwrap(window.gitApi.commit({
-        message: `Resolve ${fileName}`,
-        amend: false,
-        noVerify: false,
-      }));
-      toast("success", "Resolved and committed");
+      toast("success", "Marked resolved");
       await refreshAll();
 
       if (nextFile) {
@@ -416,6 +414,11 @@ export function MergeEditor() {
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
+  }
+
+  function onClose() {
+    selectConflictFile(null);
+    setView("graph");
   }
 
   const baseOptions = useMemo<monacoNs.editor.IStandaloneEditorConstructionOptions>(
@@ -493,6 +496,7 @@ export function MergeEditor() {
         onPrev={() => onNavigate("prev")}
         onNext={() => onNavigate("next")}
         onSave={saveAndMarkResolved}
+        onClose={onClose}
         canSave={!loading}
       />
       <div
@@ -693,6 +697,7 @@ function MergeToolbar({
   onPrev,
   onNext,
   onSave,
+  onClose,
   canSave,
 }: {
   unresolved: number;
@@ -703,6 +708,7 @@ function MergeToolbar({
   onPrev: () => void;
   onNext: () => void;
   onSave: () => void;
+  onClose: () => void;
   canSave: boolean;
 }) {
   return (
@@ -757,6 +763,9 @@ function MergeToolbar({
           <CheckIcon className="size-4" />
           Mark resolved
         </button>
+        <ToolbarIconButton onClick={onClose} title="Close merge editor">
+          <CloseIcon className="size-4" />
+        </ToolbarIconButton>
       </div>
     </div>
   );

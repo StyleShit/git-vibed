@@ -806,6 +806,27 @@ export class GitExecutor {
     fs.writeFileSync(abs, content, "utf8");
   }
 
+  // Read .git/MERGE_MSG so the commit panel can pre-fill the standard
+  // "Merge branch 'X' into 'Y'" subject while a merge is in progress.
+  // Returns "" when the file is absent (no merge) or unreadable.
+  async mergeMessage(): Promise<string> {
+    try {
+      const gitDir = path.join(this.repoPath, ".git");
+      const msgPath = path.join(gitDir, "MERGE_MSG");
+      if (!fs.existsSync(msgPath)) return "";
+      const raw = fs.readFileSync(msgPath, "utf8");
+      // Strip the trailing "# Conflicts:" comment block git appends when
+      // there are conflicts — it's meta, not part of the commit message.
+      return raw
+        .split(/\r?\n/)
+        .filter((l) => !l.startsWith("#"))
+        .join("\n")
+        .trimEnd();
+    } catch {
+      return "";
+    }
+  }
+
   // ---- Remotes -----------------------------------------------------------
 
   async remotes(): Promise<Remote[]> {
