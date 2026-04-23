@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Editor, { DiffEditor, type Monaco } from "@monaco-editor/react";
 import type * as monacoNs from "monaco-editor";
 import { useUI } from "../../stores/ui";
-import { useActive, useRepo } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useActiveTab, useRepo } from "../../stores/repo";
+import { gitStatusOptions } from "../../queries/gitApi";
 import { unwrap } from "../../lib/ipc";
 import {
   threeWayMerge,
@@ -60,7 +62,8 @@ export function MergeEditor() {
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
   const confirmDialog = useConfirm();
-  const status = useActive("status") ?? null;
+  const activePath = useActiveTab()?.path;
+  const status = useQuery(gitStatusOptions(activePath)).data ?? null;
   const oursBranch = status?.branch ?? "ours";
   const theirsBranch = status?.incomingBranch ?? "theirs";
   const conflicted = status?.conflicted ?? [];

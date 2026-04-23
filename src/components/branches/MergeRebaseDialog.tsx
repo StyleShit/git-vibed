@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
-import { useRepo, useActive } from "../../stores/repo";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { gitStatusOptions } from "../../queries/gitApi";
 
 export function MergeRebaseDialog({
   kind,
@@ -13,7 +15,8 @@ export function MergeRebaseDialog({
   source: string;
   onClose: () => void;
 }) {
-  const status = useActive("status") ?? null;
+  const activePath = useActiveTab()?.path;
+  const status = useQuery(gitStatusOptions(activePath)).data ?? null;
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);

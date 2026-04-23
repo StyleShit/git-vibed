@@ -1,12 +1,15 @@
 import { useEffect } from "react";
-import { useRepo, useActive } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { gitStatusOptions } from "../../queries/gitApi";
 import { useConfirm } from "../ui/Confirm";
 import { CheckIcon, CloseIcon } from "../ui/Icons";
 
 export function ConflictList() {
-  const status = useActive("status") ?? null;
+  const activePath = useActiveTab()?.path;
+  const status = useQuery(gitStatusOptions(activePath)).data ?? null;
   const refreshAll = useRepo((s) => s.refreshAll);
   const selected = useUI((s) => s.selectedConflictFile);
   const selectConflictFile = useUI((s) => s.selectConflictFile);
