@@ -405,10 +405,9 @@ export function MergeEditor() {
       await unwrap(window.gitApi.markResolved([file]));
       toast("success", "Marked resolved");
       await refreshAll();
-
-      if (nextFile) {
-        selectConflictFile(nextFile);
-      }
+      // Advance to the next conflicted file; clear when none left so the
+      // stale editor for a now-resolved file doesn't linger.
+      selectConflictFile(nextFile);
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -507,7 +506,10 @@ export function MergeEditor() {
       }
       toast("success", "Resolved");
       await refreshAll();
-      if (nextFile) selectConflictFile(nextFile);
+      // Always move the selection off the resolved file — either onto the
+      // next conflict or to nothing. Without this the resolution panel
+      // keeps rendering for a path that's no longer in `conflicted`.
+      selectConflictFile(nextFile);
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }

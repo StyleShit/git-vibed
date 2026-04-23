@@ -34,9 +34,16 @@ export function ConflictList() {
     try {
       if (isMerge) {
         // Merge commit is finished from the regular commit panel (which
-        // pre-fills MERGE_MSG) — here we only leave the editor so the
-        // user sees that panel.
+        // pre-fills MERGE_MSG). Drop every right-panel selection so the
+        // graph view lands straight on the changes panel — same
+        // behavior as the editor's close button.
+        const ui = useUI.getState();
         selectConflictFile(null);
+        ui.selectCommit(null);
+        ui.selectStash(null);
+        ui.selectCommitFile(null);
+        ui.selectWipFile(null);
+        ui.selectStashFile(null);
         setView("graph");
       } else if (isRebase) {
         await unwrap(window.gitApi.rebaseContinue());
