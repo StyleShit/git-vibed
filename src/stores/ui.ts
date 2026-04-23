@@ -1,12 +1,11 @@
 import { create } from "zustand";
+import { Toast } from "@base-ui-components/react/toast";
 
 export type MainView = "graph" | "changes" | "remotes" | "settings" | "prs" | "pr-detail" | "merge";
 
-interface Toast {
-  id: string;
-  kind: "error" | "info" | "success";
-  text: string;
-}
+export type ToastKind = "error" | "info" | "success";
+
+export const toastManager = Toast.createToastManager();
 
 // Commit-file selection opens an inline diff view inside the graph main
 // panel. Kept in the UI store so it survives across re-renders of the
@@ -44,7 +43,6 @@ interface UIState {
   commandPaletteOpen: boolean;
   welcomeOpen: boolean;
   hoveredBranch: string | null;
-  toasts: Toast[];
   setView: (v: MainView) => void;
   selectCommit: (hash: string | null) => void;
   selectFile: (p: string | null) => void;
@@ -57,11 +55,10 @@ interface UIState {
   setCommandPalette: (open: boolean) => void;
   setWelcomeOpen: (open: boolean) => void;
   setHoveredBranch: (b: string | null) => void;
-  toast: (kind: Toast["kind"], text: string) => void;
-  dismissToast: (id: string) => void;
+  toast: (kind: ToastKind, text: string) => void;
 }
 
-export const useUI = create<UIState>((set, get) => ({
+export const useUI = create<UIState>((set) => ({
   view: "graph",
   selectedCommit: null,
   selectedFile: null,
@@ -74,7 +71,6 @@ export const useUI = create<UIState>((set, get) => ({
   commandPaletteOpen: false,
   welcomeOpen: false,
   hoveredBranch: null,
-  toasts: [],
   setView: (view) => set({ view }),
   // Selecting a commit clears stash selection (and vice versa) — the right
   // inspector only shows one thing at a time.
@@ -127,11 +123,10 @@ export const useUI = create<UIState>((set, get) => ({
   setWelcomeOpen: (welcomeOpen) => set({ welcomeOpen }),
   setHoveredBranch: (hoveredBranch) => set({ hoveredBranch }),
   toast: (kind, text) => {
-    const id = crypto.randomUUID();
-    set({ toasts: [...get().toasts, { id, kind, text }] });
-    setTimeout(() => {
-      set({ toasts: get().toasts.filter((t) => t.id !== id) });
-    }, 5000);
+    toastManager.add({
+      title: text,
+      type: kind,
+      priority: kind === "error" ? "high" : "low",
+    });
   },
-  dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
 }));

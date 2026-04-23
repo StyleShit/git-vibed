@@ -21,6 +21,7 @@ import { StashFileDiff } from "./StashFileDiff";
 import { ResizeHandle } from "../ui/ResizeHandle";
 import { useSettings } from "../../stores/settings";
 import {
+  CheckIcon,
   ComputerIcon,
   RemoteIcon,
   StashIcon,
@@ -201,18 +202,7 @@ function ColumnHeaders({
   graphColumnWidth: number;
   columns: GraphColumns;
 }) {
-  const [gearOpen, setGearOpen] = useState(false);
   const setGraphColumn = useSettings((s) => s.setGraphColumn);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!gearOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setGearOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [gearOpen]);
 
   return (
     <div className="flex h-7 shrink-0 items-stretch border-b border-neutral-800 bg-neutral-925 text-[10px] uppercase tracking-wider text-neutral-500">
@@ -222,38 +212,48 @@ function ColumnHeaders({
       {columns.author && <ColHead width={AUTHOR_COL_WIDTH}>Author</ColHead>}
       {columns.date && <ColHead width={DATE_COL_WIDTH}>Date</ColHead>}
       {columns.sha && <ColHead width={SHA_COL_WIDTH}>SHA</ColHead>}
-      <div className="relative ml-auto flex items-center pr-2" ref={ref}>
-        <button
-          onClick={() => setGearOpen((v) => !v)}
-          className="rounded p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
-          title="Graph columns"
-        >
-          <SettingsIcon className="size-3.5" />
-        </button>
-        {gearOpen && (
-          <div className="absolute right-0 top-full z-20 mt-1 min-w-[180px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-[11px] shadow-lg">
-            <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
-              Columns
-            </div>
-            {([
-              ["author", "Author"],
-              ["date", "Date"],
-              ["sha", "SHA"],
-            ] as const).map(([k, label]) => (
-              <label
-                key={k}
-                className="flex items-center gap-2 px-3 py-1.5 normal-case tracking-normal hover:bg-neutral-800"
-              >
-                <input
-                  type="checkbox"
-                  checked={columns[k]}
-                  onChange={(e) => setGraphColumn(k, e.target.checked)}
-                />
-                <span>{label}</span>
-              </label>
-            ))}
-          </div>
-        )}
+      <div className="ml-auto flex items-center pr-2">
+        <Menu.Root modal={false}>
+          <Menu.Trigger
+            className="rounded p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
+            title="Graph columns"
+          >
+            <SettingsIcon className="size-3.5" />
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Positioner
+              side="bottom"
+              align="end"
+              sideOffset={4}
+              className="z-50 outline-none"
+            >
+              <Menu.Popup className="min-w-[180px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-[11px] shadow-lg outline-none">
+                <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
+                  Columns
+                </div>
+                {([
+                  ["author", "Author"],
+                  ["date", "Date"],
+                  ["sha", "SHA"],
+                ] as const).map(([k, label]) => (
+                  <Menu.CheckboxItem
+                    key={k}
+                    checked={columns[k]}
+                    onCheckedChange={(checked) => setGraphColumn(k, checked)}
+                    className="flex cursor-default items-center gap-2 px-3 py-1.5 normal-case tracking-normal outline-none data-[highlighted]:bg-neutral-800"
+                  >
+                    <span className="flex size-3 items-center justify-center rounded-sm border border-neutral-600 bg-neutral-800">
+                      <Menu.CheckboxItemIndicator className="text-indigo-400">
+                        <CheckIcon className="size-2.5" />
+                      </Menu.CheckboxItemIndicator>
+                    </span>
+                    <span>{label}</span>
+                  </Menu.CheckboxItem>
+                ))}
+              </Menu.Popup>
+            </Menu.Positioner>
+          </Menu.Portal>
+        </Menu.Root>
       </div>
     </div>
   );

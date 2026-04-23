@@ -1,32 +1,32 @@
-import { useUI } from "../../stores/ui";
+import { Toast } from "@base-ui-components/react/toast";
 
 export function Toasts() {
-  const { toasts, dismissToast } = useUI();
+  const { toasts } = Toast.useToastManager();
   return (
-    <div className="pointer-events-none fixed bottom-10 right-4 z-50 flex flex-col gap-2">
+    <Toast.Viewport className="pointer-events-none fixed bottom-10 right-4 z-50 flex w-[26rem] max-w-[calc(100vw-2rem)] flex-col gap-2">
       {toasts.map((t) => (
-        <div
+        <Toast.Root
           key={t.id}
-          className={`pointer-events-auto max-w-md rounded-md border px-3 py-2 text-sm shadow-lg ${
-            t.kind === "error"
+          toast={t}
+          className={`pointer-events-auto rounded-md border px-3 py-2 text-sm shadow-lg transition-opacity data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 ${
+            t.type === "error"
               ? "border-red-900 bg-red-950 text-red-200"
-              : t.kind === "success"
+              : t.type === "success"
                 ? "border-emerald-900 bg-emerald-950 text-emerald-200"
                 : "border-neutral-700 bg-neutral-900 text-neutral-200"
           }`}
         >
           <div className="flex items-start justify-between gap-3">
-            <div className="whitespace-pre-wrap">{t.text}</div>
-            <button
-              onClick={() => dismissToast(t.id)}
+            <Toast.Title className="whitespace-pre-wrap" />
+            <Toast.Close
               className="text-neutral-500 hover:text-neutral-100"
               aria-label="dismiss"
             >
               ×
-            </button>
+            </Toast.Close>
           </div>
-        </div>
+        </Toast.Root>
       ))}
-    </div>
+    </Toast.Viewport>
   );
 }
