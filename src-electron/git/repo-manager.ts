@@ -77,6 +77,7 @@ class RepoSession {
   // reflog entry's subject describes how the user arrived at that
   // HEAD — which is exactly what we need to decide the inverse.
   //
+  //   commit (merge): …             → reset --keep (full undo of the merge)
   //   commit*                       → reset --soft (uncommit / redo commit)
   //   checkout: moving from X to Y  → checkout X (undo) / checkout Y (redo)
   //   anything else                 → reset --keep (safe fallback)
@@ -94,6 +95,18 @@ class RepoSession {
     if (mCheckout) {
       const [, from, to] = mCheckout;
       await this.checkoutRef(direction === "undo" ? from : to);
+      return;
+    }
+
+    // Merge commits have to go before the generic commit branch —
+    // `commit (merge): …` would otherwise match it and do a soft
+    // reset, which leaves the merge's entire file delta staged. The
+    // next merge then trips "Your local changes to the following
+    // files would be overwritten by merge." `--keep` moves HEAD and
+    // snaps the tree back to the first parent, while still bailing
+    // out rather than clobbering any unrelated uncommitted edits.
+    if (/^commit\s*\(merge\)/.test(subject)) {
+      await this.executor.resetKeep(direction === "undo" ? older.sha : newer.sha);
       return;
     }
 
