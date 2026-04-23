@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import type { DiffHunk, DiffLine, FileDiff } from "@shared/types";
 import { unwrap } from "../../lib/ipc";
 import { useUI } from "../../stores/ui";
-import { useRepo } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useSettings } from "../../stores/settings";
 import { buildHunkPatch, buildLinePatch } from "../../lib/patch-builder";
+import {
+  stagePatchMutation,
+  unstagePatchMutation,
+} from "../../queries/mutations";
 
 interface Props {
   file: string;
@@ -19,7 +24,9 @@ export function DiffViewer({ file, staged }: Props) {
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const toast = useUI((s) => s.toast);
-  const refreshStatus = useRepo((s) => s.refreshStatus);
+  const activePath = useActiveTab()?.path ?? "";
+  const stagePatchMut = useMutation(stagePatchMutation(activePath));
+  const unstagePatchMut = useMutation(unstagePatchMutation(activePath));
   const viewMode = useSettings((s) => s.diffViewMode);
   const setViewMode = useSettings((s) => s.setDiffViewMode);
 
@@ -49,9 +56,8 @@ export function DiffViewer({ file, staged }: Props) {
     if (!diff) return;
     try {
       const patch = buildHunkPatch(diff.path, diff.hunks[hunkIdx], diff.oldPath);
-      if (staged) await unwrap(window.gitApi.unstagePatch(patch));
-      else await unwrap(window.gitApi.stagePatch(patch));
-      await refreshStatus();
+      if (staged) await unstagePatchMut.mutateAsync(patch);
+      else await stagePatchMut.mutateAsync(patch);
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -76,10 +82,9 @@ export function DiffViewer({ file, staged }: Props) {
         return;
       }
       const combined = patches.join("");
-      if (staged) await unwrap(window.gitApi.unstagePatch(combined));
-      else await unwrap(window.gitApi.stagePatch(combined));
+      if (staged) await unstagePatchMut.mutateAsync(combined);
+      else await stagePatchMut.mutateAsync(combined);
       setSelected(new Set());
-      await refreshStatus();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }

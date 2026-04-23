@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { buildTree, type TreeNode } from "../../lib/file-tree";
 import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
@@ -10,6 +10,11 @@ import {
   gitStatusOptions,
   gitWorktreesOptions,
 } from "../../queries/gitApi";
+import {
+  discardMutation,
+  stageMutation,
+  unstageMutation,
+} from "../../queries/mutations";
 import { useConfirm } from "../ui/Confirm";
 import { CommitPanel } from "../commit/CommitPanel";
 import {
@@ -35,6 +40,9 @@ export function ChangesPanel() {
   const worktrees = useQuery(gitWorktreesOptions(activeTab?.path)).data ?? [];
   const refreshStatus = useRepo((s) => s.refreshStatus);
   const refreshStashes = useRepo((s) => s.refreshStashes);
+  const stageMut = useMutation(stageMutation(repoPath));
+  const unstageMut = useMutation(unstageMutation(repoPath));
+  const discardMut = useMutation(discardMutation(repoPath));
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
   const selectWipFile = useUI((s) => s.selectWipFile);
@@ -87,7 +95,6 @@ export function ChangesPanel() {
   async function run(fn: () => Promise<unknown>) {
     try {
       await fn();
-      await refreshStatus();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -115,12 +122,12 @@ export function ChangesPanel() {
 
   const stage = async (files: string[]) => {
     const set = new Set(files);
-    await run(() => unwrap(window.gitApi.stage(files)));
+    await run(() => stageMut.mutateAsync(files));
     focusLastUnstagedAfter(set);
     clearMulti();
   };
   const unstage = async (files: string[]) => {
-    await run(() => unwrap(window.gitApi.unstage(files)));
+    await run(() => unstageMut.mutateAsync(files));
     clearMulti();
   };
   const discard = async (files: string[]) => {
@@ -132,7 +139,7 @@ export function ChangesPanel() {
     });
     if (!ok) return;
     const set = new Set(files);
-    await run(() => unwrap(window.gitApi.discard(files)));
+    await run(() => discardMut.mutateAsync(files));
     focusLastUnstagedAfter(set);
     clearMulti();
   };

@@ -1,9 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import type { FileChange } from "@shared/types";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 import { gitStatusOptions } from "../../queries/gitApi";
+import {
+  discardMutation,
+  stageMutation,
+  unstageMutation,
+} from "../../queries/mutations";
 import { useConfirm } from "../ui/Confirm";
 
 interface Props {
@@ -14,7 +18,9 @@ interface Props {
 export function StagingArea({ selected, onSelect }: Props) {
   const activePath = useActiveTab()?.path;
   const status = useQuery(gitStatusOptions(activePath)).data ?? null;
-  const refreshStatus = useRepo((s) => s.refreshStatus);
+  const stageMut = useMutation(stageMutation(activePath ?? ""));
+  const unstageMut = useMutation(unstageMutation(activePath ?? ""));
+  const discardMut = useMutation(discardMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
   if (!status) return null;
@@ -22,8 +28,7 @@ export function StagingArea({ selected, onSelect }: Props) {
 
   async function stage(files: string[]) {
     try {
-      await unwrap(window.gitApi.stage(files));
-      await refreshStatus();
+      await stageMut.mutateAsync(files);
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -31,8 +36,7 @@ export function StagingArea({ selected, onSelect }: Props) {
 
   async function unstage(files: string[]) {
     try {
-      await unwrap(window.gitApi.unstage(files));
-      await refreshStatus();
+      await unstageMut.mutateAsync(files);
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -47,8 +51,7 @@ export function StagingArea({ selected, onSelect }: Props) {
     });
     if (!ok) return;
     try {
-      await unwrap(window.gitApi.discard(files));
-      await refreshStatus();
+      await discardMut.mutateAsync(files);
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }

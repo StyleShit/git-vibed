@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { useUI } from "../../stores/ui";
-import { useRepo } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { unwrap } from "../../lib/ipc";
 import { useSettings } from "../../stores/settings";
 import { buildHunkPatch, buildLinePatch } from "../../lib/patch-builder";
 import { detectLanguage } from "../../lib/highlight";
+import {
+  discardPatchMutation,
+  stagePatchMutation,
+  unstagePatchMutation,
+} from "../../queries/mutations";
 import type { FileDiff } from "@shared/types";
 import { ChevronRightIcon, CloseIcon } from "../ui/Icons";
 import { SplitView, UnifiedView, type HunkAction } from "./DiffView";
@@ -22,7 +28,10 @@ export function WipFileDiff({ path, staged }: { path: string; staged: boolean })
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
   const selectWipFile = useUI((s) => s.selectWipFile);
-  const refreshStatus = useRepo((s) => s.refreshStatus);
+  const activePath = useActiveTab()?.path ?? "";
+  const stagePatchMut = useMutation(stagePatchMutation(activePath));
+  const unstagePatchMut = useMutation(unstagePatchMutation(activePath));
+  const discardPatchMut = useMutation(discardPatchMutation(activePath));
   const viewMode = useSettings((s) => s.diffViewMode);
   const setViewMode = useSettings((s) => s.setDiffViewMode);
   const lang = useMemo(() => detectLanguage(path), [path]);
@@ -141,13 +150,12 @@ export function WipFileDiff({ path, staged }: { path: string; staged: boolean })
     const patch = buildHunkPatch(diff.path, diff.hunks[hunkIdx], diff.oldPath);
     try {
       if (staged) {
-        await unwrap(window.gitApi.unstagePatch(patch));
+        await unstagePatchMut.mutateAsync(patch);
         toast("success", "Unstaged hunk");
       } else {
-        await unwrap(window.gitApi.stagePatch(patch));
+        await stagePatchMut.mutateAsync(patch);
         toast("success", "Staged hunk");
       }
-      await refreshStatus();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -164,9 +172,8 @@ export function WipFileDiff({ path, staged }: { path: string; staged: boolean })
     if (!ok) return;
     const patch = buildHunkPatch(diff.path, diff.hunks[hunkIdx], diff.oldPath);
     try {
-      await unwrap(window.gitApi.discardPatch(patch));
+      await discardPatchMut.mutateAsync(patch);
       toast("success", "Discarded hunk");
-      await refreshStatus();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -188,14 +195,13 @@ export function WipFileDiff({ path, staged }: { path: string; staged: boolean })
     const combined = patches.join("");
     try {
       if (staged) {
-        await unwrap(window.gitApi.unstagePatch(combined));
+        await unstagePatchMut.mutateAsync(combined);
         toast("success", "Unstaged selection");
       } else {
-        await unwrap(window.gitApi.stagePatch(combined));
+        await stagePatchMut.mutateAsync(combined);
         toast("success", "Staged selection");
       }
       setSelected(new Set());
-      await refreshStatus();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -222,10 +228,9 @@ export function WipFileDiff({ path, staged }: { path: string; staged: boolean })
     }
     if (patches.length === 0) return;
     try {
-      await unwrap(window.gitApi.discardPatch(patches.join("")));
+      await discardPatchMut.mutateAsync(patches.join(""));
       toast("success", "Discarded selection");
       setSelected(new Set());
-      await refreshStatus();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
