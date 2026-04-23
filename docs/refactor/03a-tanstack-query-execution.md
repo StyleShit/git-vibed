@@ -26,6 +26,25 @@ No other deps.
 
 All keys start with `["repo", repoPath]` so tab switches are free (each tab is a distinct cache). Hooks live in `src/queries/*.ts`.
 
+**Authoring convention — `queryOptions` factories.** Every hook is backed by a `queryOptions(...)` factory exported alongside the `useX` hook. Example:
+
+```ts
+export function gitStatusOptions(path: string) {
+  return queryOptions({
+    queryKey: [...repoKey(path), "status"] as const,
+    queryFn: () => unwrap(window.gitApi.status()),
+    staleTime: 0,
+    gcTime: 5 * 60_000,
+  });
+}
+
+export function useGitStatus(path: string | null | undefined) {
+  return useQuery({ ...gitStatusOptions(path ?? ""), enabled: !!path });
+}
+```
+
+The factory is the canonical form — it feeds `useQuery`, `useInfiniteQuery`, `prefetchQuery`, `ensureQueryData`, `invalidateQueries({ queryKey })`, and `setQueryData` without re-declaring the key at every call site. Mutations that need to invalidate targeted keys should import the factory and read `.queryKey` off it rather than hand-rolling the array.
+
 | Hook | queryKey | queryFn | staleTime | gcTime | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `useGitStatus(path)` | `["repo", path, "status"]` | `unwrap(gitApi.status())` | `0` | `5m` | Invalidated on every mutation + watcher `index`/`worktree`/`head`. Polled by focus fallback. |
