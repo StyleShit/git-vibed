@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
-import { useRepo, useActiveTabShallow } from "../../stores/repo";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap, maybe } from "../../lib/ipc";
+import {
+  gitBranchesOptions,
+  gitStatusOptions,
+} from "../../queries/gitApi";
 
 export function PRCreateDialog({
   onClose,
@@ -13,10 +18,9 @@ export function PRCreateDialog({
   // back to the currently checked-out branch, matching the older UX.
   headBranch?: string;
 }) {
-  const { status, branches } = useActiveTabShallow((t) => ({
-    status: t?.status ?? null,
-    branches: t?.branches ?? [],
-  }));
+  const activePath = useActiveTab()?.path;
+  const status = useQuery(gitStatusOptions(activePath)).data ?? null;
+  const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
   const refreshPRs = useRepo((s) => s.refreshPRs);
   const toast = useUI((s) => s.toast);
   const head = headBranch ?? status?.branch ?? "";

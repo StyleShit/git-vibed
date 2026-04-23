@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useUI } from "../../stores/ui";
-import { useActive, useActiveTab, useRepo } from "../../stores/repo";
+import { useActiveTab, useRepo } from "../../stores/repo";
 import { gitStatusOptions } from "../../queries/gitApi";
 import { BranchGraph } from "../graph/BranchGraph";
 import { RemotesPanel } from "../remotes/RemotesPanel";
@@ -15,9 +15,8 @@ import { unwrap } from "../../lib/ipc";
 export function MainPanel() {
   const view = useUI((s) => s.view);
   const activeTab = useActiveTab();
-  const status = useQuery(gitStatusOptions(activeTab?.path)).data ?? null;
-  const loading = useActive("loading") ?? false;
-  const commits = useActive("commits") ?? [];
+  const statusQuery = useQuery(gitStatusOptions(activeTab?.path));
+  const status = statusQuery.data ?? null;
   const mergeInProgress = !!status?.mergeInProgress;
   const rebaseInProgress = !!status?.rebaseInProgress;
   const inConflict = (status?.conflicted.length ?? 0) > 0;
@@ -28,8 +27,8 @@ export function MainPanel() {
     (mergeInProgress || rebaseInProgress) && view !== "merge";
 
   // Render a loader only on the initial repo open when we don't have any
-  // data yet — background refreshes shouldn't black out the graph.
-  const initialLoading = loading && commits.length === 0 && !status;
+  // data yet — background refetches shouldn't black out the graph.
+  const initialLoading = !!activeTab && statusQuery.isPending;
 
   return (
     <main className="relative flex min-w-0 flex-1 flex-col bg-neutral-950">

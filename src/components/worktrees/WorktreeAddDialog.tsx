@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
-import { useRepo, useActiveTabShallow } from "../../stores/repo";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import { gitBranchesOptions } from "../../queries/gitApi";
 
 // Create a new git worktree at a user-picked filesystem path. Two modes:
 //   - checkout an existing branch (local or remote)
@@ -12,10 +14,9 @@ import { unwrap } from "../../lib/ipc";
 // flat and avoids shelling out to `git worktree add -b name path base`,
 // which has subtler argv rules across git versions.
 export function WorktreeAddDialog({ onClose }: { onClose: () => void }) {
-  const { branches, repoPath } = useActiveTabShallow((t) => ({
-    branches: t?.branches ?? [],
-    repoPath: t?.path ?? null,
-  }));
+  const activeTab = useActiveTab();
+  const repoPath = activeTab?.path ?? null;
+  const branches = useQuery(gitBranchesOptions(repoPath)).data ?? [];
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
 

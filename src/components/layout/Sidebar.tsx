@@ -1,6 +1,15 @@
 import { useMemo, useRef, useState } from "react";
-import { useActiveTabShallow } from "../../stores/repo";
+import { useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { useSettings } from "../../stores/settings";
+import {
+  ghAvailableOptions,
+  gitBranchesOptions,
+  gitStashesOptions,
+  gitTagsOptions,
+  gitWorktreesOptions,
+  prsOptions,
+} from "../../queries/gitApi";
 import { BranchList, type BranchListHandle } from "../branches/BranchList";
 import { PRList } from "../github/PRList";
 import { RemoteBranchList } from "../branches/RemoteBranchList";
@@ -33,16 +42,21 @@ interface SectionDef {
 }
 
 export function Sidebar() {
-  const { localCount, remoteCount, stashCount, tagCount, worktreeCount, prCount, ghAvailable } =
-    useActiveTabShallow((t) => ({
-      localCount: t?.branches.filter((b) => b.isLocal).length ?? 0,
-      remoteCount: t?.branches.filter((b) => b.isRemote).length ?? 0,
-      stashCount: t?.stashes.length ?? 0,
-      tagCount: t?.tags.length ?? 0,
-      worktreeCount: t?.worktrees.length ?? 0,
-      prCount: t?.prs.length ?? 0,
-      ghAvailable: t?.ghAvailable ?? false,
-    }));
+  const activePath = useActiveTab()?.path;
+  const prStateFilter = useSettings((s) => s.prStateFilter);
+  const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
+  const stashes = useQuery(gitStashesOptions(activePath)).data ?? [];
+  const tags = useQuery(gitTagsOptions(activePath)).data ?? [];
+  const worktrees = useQuery(gitWorktreesOptions(activePath)).data ?? [];
+  const ghAvailable = useQuery(ghAvailableOptions(activePath)).data ?? false;
+  const prs =
+    useQuery(prsOptions(activePath, prStateFilter, ghAvailable)).data ?? [];
+  const localCount = branches.filter((b) => b.isLocal).length;
+  const remoteCount = branches.filter((b) => b.isRemote).length;
+  const stashCount = stashes.length;
+  const tagCount = tags.length;
+  const worktreeCount = worktrees.length;
+  const prCount = prs.length;
 
   const [filter, setFilter] = useState("");
   // Section collapse state is persisted across launches via the settings

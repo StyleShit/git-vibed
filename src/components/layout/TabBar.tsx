@@ -1,5 +1,7 @@
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useQueries } from "@tanstack/react-query";
+import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
+import { gitStatusOptions } from "../../queries/gitApi";
 import { Tooltip } from "../ui/Tooltip";
 
 // -webkit-app-region doesn't inherit in all cases, so we set it explicitly on
@@ -15,8 +17,11 @@ export function TabBar() {
   const setActive = useRepo((s) => s.setActive);
   const closeTab = useRepo((s) => s.closeTab);
   const setWelcomeOpen = useUI((s) => s.setWelcomeOpen);
-  const status = useActiveTab()?.status;
-  const hasConflicts = (status?.conflicted.length ?? 0) > 0;
+  const statuses = useQueries({
+    queries: tabs.map((t) => gitStatusOptions(t.path)),
+  });
+  const hasConflicts =
+    (statuses[activeIdx]?.data?.conflicted.length ?? 0) > 0;
   const isMac =
     typeof navigator !== "undefined" && /Mac/.test(navigator.platform ?? "");
 
@@ -52,8 +57,9 @@ export function TabBar() {
       {tabs.map((tab, idx) => {
         const isActive = idx === activeIdx;
         const folder = tab.path.split(/[\\/]/).pop() ?? tab.path;
-        const branch = tab.status?.branch;
-        const tabHasConflicts = (tab.status?.conflicted.length ?? 0) > 0;
+        const tabStatus = statuses[idx]?.data;
+        const branch = tabStatus?.branch;
+        const tabHasConflicts = (tabStatus?.conflicted.length ?? 0) > 0;
         return (
           <div
             key={tab.path}

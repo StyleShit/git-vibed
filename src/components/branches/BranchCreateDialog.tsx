@@ -1,8 +1,13 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
-import { useRepo, useActiveTabShallow } from "../../stores/repo";
+import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import {
+  gitBranchesOptions,
+  gitStatusOptions,
+} from "../../queries/gitApi";
 
 export function BranchCreateDialog({
   onClose,
@@ -11,10 +16,9 @@ export function BranchCreateDialog({
   onClose: () => void;
   initialBase?: string;
 }) {
-  const { branches, status } = useActiveTabShallow((t) => ({
-    branches: t?.branches ?? [],
-    status: t?.status ?? null,
-  }));
+  const activePath = useActiveTab()?.path;
+  const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
+  const status = useQuery(gitStatusOptions(activePath)).data ?? null;
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const [name, setName] = useState("");

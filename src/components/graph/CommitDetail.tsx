@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useActive, useActiveTab } from "../../stores/repo";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { maybe } from "../../lib/ipc";
 import {
+  gitLogOptions,
   gitStatusOptions,
   ghAvailableOptions,
   prsOptions,
@@ -32,7 +33,11 @@ import type { Commit, CommitFile, FileStatus, PullRequest } from "@shared/types"
 export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => void }) {
   const activePath = useActiveTab()?.path;
   const prStateFilter = useSettings((s) => s.prStateFilter);
-  const commits = useActive("commits") ?? [];
+  const logQuery = useInfiniteQuery(gitLogOptions(activePath));
+  const commits = useMemo(
+    () => logQuery.data?.pages.flat() ?? [],
+    [logQuery.data],
+  );
   const ghAvailable = useQuery(ghAvailableOptions(activePath)).data ?? false;
   const prs =
     useQuery(prsOptions(activePath, prStateFilter, ghAvailable)).data ?? [];

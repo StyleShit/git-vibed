@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
+import { useQuery } from "@tanstack/react-query";
 import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
+import {
+  gitBranchesOptions,
+  gitStatusOptions,
+  gitUndoOptions,
+} from "../../queries/gitApi";
 import {
   BranchIcon,
   ChevronDownIcon,
@@ -26,13 +32,14 @@ type PullStrategy = "merge" | "rebase" | "ff-only";
 // Toolbar layout: repo + branch selectors on the left, two button groups
 // in the middle (history + sync / workflow), utilities on the right.
 export function Toolbar() {
-  const { status, branches, path, backgroundFetching, undo } = useActiveTabShallow((t) => ({
-    status: t?.status ?? null,
-    branches: t?.branches ?? [],
+  const { path, backgroundFetching } = useActiveTabShallow((t) => ({
     path: t?.path ?? null,
     backgroundFetching: t?.backgroundFetching ?? false,
-    undo: t?.undo ?? { canUndo: false, canRedo: false },
   }));
+  const status = useQuery(gitStatusOptions(path)).data ?? null;
+  const branches = useQuery(gitBranchesOptions(path)).data ?? [];
+  const undo =
+    useQuery(gitUndoOptions(path)).data ?? { canUndo: false, canRedo: false };
   const toast = useUI((s) => s.toast);
   const setCommandPalette = useUI((s) => s.setCommandPalette);
   const view = useUI((s) => s.view);
