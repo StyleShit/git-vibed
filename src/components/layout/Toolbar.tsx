@@ -33,9 +33,15 @@ export function Toolbar() {
   }));
   const toast = useUI((s) => s.toast);
   const setCommandPalette = useUI((s) => s.setCommandPalette);
+  const view = useUI((s) => s.view);
   const refreshAll = useRepo((s) => s.refreshAll);
   const confirmDialog = useConfirm();
   const defaultStrategy = useSettings((s) => s.defaultPullStrategy);
+  // Most history/sync actions are nonsense while resolving a merge:
+  // pull/push/fetch, stash, undo/redo, and switching branches all
+  // either error out or silently do the wrong thing. Disable them so
+  // the user focuses on finishing the merge.
+  const mergeActive = view === "merge";
   const [busy, setBusy] = useState<
     "pull" | "push" | "fetch" | "stash" | "pop" | "undo" | "redo" | null
   >(null);
@@ -176,13 +182,14 @@ export function Toolbar() {
         setOpen={setBranchMenuOpen}
         branches={branches}
         currentBranch={currentBranch}
+        disabled={mergeActive}
       />
 
       <div className="mx-2 h-6 w-px bg-neutral-800" />
 
       <ToolbarIconButton
         onClick={runUndo}
-        disabled={!path || !undo.canUndo || !!busy}
+        disabled={!path || !undo.canUndo || !!busy || mergeActive}
         title={undo.undoLabel ? `Undo: ${undo.undoLabel}` : "Undo"}
         hint="Cmd+Z"
       >
@@ -190,7 +197,7 @@ export function Toolbar() {
       </ToolbarIconButton>
       <ToolbarIconButton
         onClick={runRedo}
-        disabled={!path || !undo.canRedo || !!busy}
+        disabled={!path || !undo.canRedo || !!busy || mergeActive}
         title={undo.redoLabel ? `Redo: ${undo.redoLabel}` : "Redo"}
         hint="Cmd+Y"
       >
@@ -201,7 +208,7 @@ export function Toolbar() {
 
       <ToolbarButton
         onClick={runFetch}
-        disabled={!!busy}
+        disabled={!!busy || mergeActive}
         label="Fetch"
         hint="Cmd+Shift+F"
         title={backgroundFetching ? "Background fetch in progress…" : undefined}
@@ -226,7 +233,7 @@ export function Toolbar() {
         badge={status?.behind || undefined}
         hint="Cmd+Shift+L"
         icon={<PullIcon className={`size-4 ${busy === "pull" ? "animate-pulse" : ""}`} />}
-        disabled={!!busy || !currentBranch}
+        disabled={!!busy || !currentBranch || mergeActive}
         onClick={() => runPull(defaultStrategy)}
         onToggleMenu={() => setPullMenuOpen((v) => !v)}
         menuOpen={pullMenuOpen}
@@ -247,7 +254,7 @@ export function Toolbar() {
         badge={status?.ahead || undefined}
         hint="Cmd+Shift+P"
         icon={<PushIcon className={`size-4 ${busy === "push" ? "animate-pulse" : ""}`} />}
-        disabled={!!busy || !currentBranch}
+        disabled={!!busy || !currentBranch || mergeActive}
         onClick={() => runPush(false)}
         onToggleMenu={() => setPushMenuOpen((v) => !v)}
         menuOpen={pushMenuOpen}
@@ -261,19 +268,19 @@ export function Toolbar() {
 
       <ToolbarButton
         onClick={() => setShowBranchCreate(true)}
-        disabled={!path}
+        disabled={!path || mergeActive}
         label="Branch"
         icon={<PlusIcon className="size-4" />}
       />
       <ToolbarButton
         onClick={runStash}
-        disabled={!!busy || changeCount === 0}
+        disabled={!!busy || changeCount === 0 || mergeActive}
         label="Stash"
         icon={<StashIcon className={`size-4 ${busy === "stash" ? "animate-pulse" : ""}`} />}
       />
       <ToolbarButton
         onClick={runPop}
-        disabled={!!busy}
+        disabled={!!busy || mergeActive}
         label="Pop"
         icon={<StashIcon className={`size-4 ${busy === "pop" ? "animate-pulse" : ""}`} />}
       />
@@ -384,11 +391,13 @@ function BranchSelector({
   setOpen,
   branches,
   currentBranch,
+  disabled,
 }: {
   open: boolean;
   setOpen: (v: boolean) => void;
   branches: import("@shared/types").Branch[];
   currentBranch: string | null;
+  disabled?: boolean;
 }) {
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
@@ -415,8 +424,8 @@ function BranchSelector({
     <div className="relative w-[200px] shrink-0">
       <button
         onClick={() => setOpen(!open)}
-        disabled={!currentBranch}
-        className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+        disabled={!currentBranch || disabled}
+        className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-sm text-neutral-200 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
         title={currentBranch ?? "detached"}
       >
         <div className="flex min-w-0 flex-1 flex-col items-start leading-tight">

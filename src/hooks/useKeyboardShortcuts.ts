@@ -123,11 +123,14 @@ export function useKeyboardShortcuts() {
       // Cmd+Shift+Z since the latter conflicts with text inputs' native
       // "redo" on macOS in common web controls).
       // Skip either when a text input has focus so normal per-field undo
-      // still works while typing a commit message or filter.
+      // still works while typing a commit message or filter. Also skip
+      // while the merge editor is open — it owns its own chunk-level
+      // undo history, and hijacking Cmd+Z would clobber that.
       if (e.key === "z" || e.key === "Z" || e.key === "y" || e.key === "Y") {
         const target = e.target as HTMLElement | null;
         const tag = target?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+        if (useUI.getState().view === "merge") return;
         const isRedo = e.key === "y" || e.key === "Y";
         e.preventDefault();
         try {

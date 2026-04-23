@@ -6,7 +6,6 @@ import { useActive, useRepo } from "../../stores/repo";
 import { unwrap } from "../../lib/ipc";
 import {
   threeWayMerge,
-  applySafe,
   acceptAll,
   regionsToString,
   conflictHeight,
@@ -14,7 +13,6 @@ import {
   acceptedLines,
   setSideDecision,
   cycleLineDecision,
-  magicWand,
   perLineDiff,
   type LineMark,
 } from "../../lib/merge-engine";
@@ -27,7 +25,6 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   CloseIcon,
-  MagicWandIcon,
 } from "../ui/Icons";
 import type { ConflictRegion } from "@shared/types";
 
@@ -316,30 +313,6 @@ export function MergeEditor() {
     setResult(regionsToString(newRegions));
   }, []);
 
-  const onApplyNonConflicting = useCallback(() => {
-    const before = regions.filter(
-      (r) => r.kind === "conflict" && !isFullyDecided(r),
-    ).length;
-    const { resolved, conflictsRemaining } = applySafe(regions);
-    recompute(resolved);
-    const fixed = before - conflictsRemaining;
-    if (fixed === 0) toast("info", "No non-conflicting changes to apply");
-    else if (conflictsRemaining === 0) toast("success", `Resolved all ${fixed} chunk(s)`);
-    else toast("success", `Resolved ${fixed}, ${conflictsRemaining} remaining`);
-  }, [regions, recompute, toast]);
-
-  const onMagicWand = useCallback(() => {
-    const before = regions.filter(
-      (r) => r.kind === "conflict" && !isFullyDecided(r),
-    ).length;
-    const { resolved, conflictsRemaining } = magicWand(regions);
-    recompute(resolved);
-    const fixed = before - conflictsRemaining;
-    if (fixed === 0) toast("info", "Magic wand couldn't find anything to auto-resolve");
-    else if (conflictsRemaining === 0) toast("success", `Magic wand resolved all ${fixed} chunk(s)`);
-    else toast("success", `Resolved ${fixed}, ${conflictsRemaining} remaining`);
-  }, [regions, recompute, toast]);
-
   const onAcceptAllSide = useCallback(
     (side: "ours" | "theirs") => recompute(acceptAll(regions, side)),
     [regions, recompute],
@@ -489,8 +462,6 @@ export function MergeEditor() {
     <div className="flex min-w-0 flex-1 flex-col">
       <MergeToolbar
         unresolved={unresolved}
-        onMagicWand={onMagicWand}
-        onApplyNonConflicting={onApplyNonConflicting}
         onAcceptOurs={() => onAcceptAllSide("ours")}
         onAcceptTheirs={() => onAcceptAllSide("theirs")}
         onPrev={() => onNavigate("prev")}
@@ -690,8 +661,6 @@ function PaneLabel({
 
 function MergeToolbar({
   unresolved,
-  onMagicWand,
-  onApplyNonConflicting,
   onAcceptOurs,
   onAcceptTheirs,
   onPrev,
@@ -701,8 +670,6 @@ function MergeToolbar({
   canSave,
 }: {
   unresolved: number;
-  onMagicWand: () => void;
-  onApplyNonConflicting: () => void;
   onAcceptOurs: () => void;
   onAcceptTheirs: () => void;
   onPrev: () => void;
@@ -713,30 +680,21 @@ function MergeToolbar({
 }) {
   return (
     <div className="flex h-11 shrink-0 items-center gap-1 border-b border-neutral-800 bg-neutral-925 px-2">
-      <ToolbarButton
-        onClick={onMagicWand}
-        label="Magic wand"
-        hint="auto-resolve using token-level diff on top of the safe rules"
-        icon={<MagicWandIcon className="size-4" />}
-      />
-      <ToolbarButton
-        onClick={onApplyNonConflicting}
-        label="Non-conflicting"
-        hint="resolve only chunks where one side didn't change or both changed identically"
-        icon={<CheckIcon className="size-4" />}
-      />
-      <div className="mx-2 h-6 w-px bg-neutral-800" />
+      {/* Arrow direction reflects where the content is going: for "All
+          ours" we're pulling from the left-hand Ours pane into the
+          center Result pane, so the arrow points right. Same logic,
+          mirrored, for "All theirs". */}
       <ToolbarButton
         onClick={onAcceptOurs}
         label="All ours"
         hint="accept every line on our side, drop every line on theirs"
-        icon={<ArrowLeftIcon className="size-4" />}
+        icon={<ArrowRightIcon className="size-4" />}
       />
       <ToolbarButton
         onClick={onAcceptTheirs}
         label="All theirs"
         hint="accept every line on their side, drop every line on ours"
-        icon={<ArrowRightIcon className="size-4" />}
+        icon={<ArrowLeftIcon className="size-4" />}
       />
       <div className="mx-2 h-6 w-px bg-neutral-800" />
       <ToolbarIconButton onClick={onPrev} title="Previous conflict">
