@@ -76,7 +76,7 @@ export const useSettings = create<SettingsState>()(
       autoFetchIntervalMs: 5 * 60 * 1000,
       defaultPullStrategy: "merge",
       skipHooksByDefault: false,
-      diffViewMode: "unified",
+      diffViewMode: "split",
       fileListViewMode: "path",
       sidebarWidth: 288,
       inspectorWidth: 352,
@@ -112,6 +112,19 @@ export const useSettings = create<SettingsState>()(
         set((s) => ({ graphColumns: { ...s.graphColumns, [k]: v } })),
       setPrStateFilter: (prStateFilter) => set({ prStateFilter }),
     }),
-    { name: "Git Vibed-settings" }
+    {
+      name: "Git Vibed-settings",
+      // v2: default diff mode flipped from "unified" to "split". Existing
+      // users still on "unified" from the previous default get reset once;
+      // anything they pick after that sticks as usual.
+      version: 2,
+      migrate: (persisted, version) => {
+        const s = (persisted ?? {}) as Partial<SettingsState>;
+        if (version < 2 && s.diffViewMode === "unified") {
+          return { ...s, diffViewMode: "split" } as SettingsState;
+        }
+        return s as SettingsState;
+      },
+    }
   )
 );

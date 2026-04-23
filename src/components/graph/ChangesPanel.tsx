@@ -814,12 +814,15 @@ function TreeNodeRow({
 }
 
 function StatusBadge({ status }: { status: FileChange["status"] }) {
+  // Untracked files are effectively "new/added from git's perspective" —
+  // render them with the same green "A" so the changes list reads as a
+  // uniform set of additions rather than mixing an ambiguous "?" in.
   const map: Record<FileChange["status"], { letter: string; color: string }> = {
     modified: { letter: "M", color: "bg-amber-500/20 text-amber-300" },
     added: { letter: "A", color: "bg-emerald-500/20 text-emerald-300" },
     deleted: { letter: "D", color: "bg-red-500/20 text-red-300" },
     renamed: { letter: "R", color: "bg-blue-500/20 text-blue-300" },
-    untracked: { letter: "?", color: "bg-neutral-700 text-neutral-300" },
+    untracked: { letter: "A", color: "bg-emerald-500/20 text-emerald-300" },
     conflicted: { letter: "!", color: "bg-red-500/30 text-red-300" },
     typechange: { letter: "T", color: "bg-violet-500/20 text-violet-300" },
     ignored: { letter: "I", color: "bg-neutral-700 text-neutral-400" },
