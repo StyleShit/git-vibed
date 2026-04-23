@@ -852,6 +852,47 @@ export class GitExecutor {
     await this.git.raw(["rm", "--", filePath]);
   }
 
+  // Look for a rename of `oldPath` on the given side between the merge
+  // base and that side's tip. Returns the new path if one was detected,
+  // null otherwise. Used by the merge editor to turn a bare "deleted"
+  // classification into a more informative "renamed to X" message when
+  // rename detection didn't already fold the two sides together.
+  async findRenameTarget(
+    oldPath: string,
+    side: "ours" | "theirs",
+  ): Promise<string | null> {
+    try {
+      const gitDir = path.join(this.repoPath, ".git");
+      const headRef = side === "ours" ? "HEAD" : "MERGE_HEAD";
+      // No merge in flight on this side → nothing to detect.
+      if (side === "theirs" && !fs.existsSync(path.join(gitDir, "MERGE_HEAD"))) {
+        return null;
+      }
+      const mergeBase = (
+        await this.git.raw(["merge-base", "HEAD", "MERGE_HEAD"])
+      ).trim();
+      if (!mergeBase) return null;
+      // -M turns on rename detection; --name-status gives us the R/A/D
+      // letters followed by the old and (for renames/copies) new paths.
+      const out = await this.git.raw([
+        "diff",
+        "--name-status",
+        "-M",
+        `${mergeBase}..${headRef}`,
+      ]);
+      for (const line of out.split(/\r?\n/)) {
+        if (!line) continue;
+        // e.g. "R095\tsrc/old.ts\tsrc/new.ts" — the score after R is the
+        // similarity percentage, then tab-separated paths.
+        const m = line.match(/^R\d*\t([^\t]+)\t([^\t]+)$/);
+        if (m && m[1] === oldPath) return m[2];
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   // Write a repo-relative file. Used by the merge editor to persist the
   // resolved result before calling markResolved.
   async writeFile(filePath: string, content: string): Promise<void> {

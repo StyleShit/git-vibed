@@ -82,6 +82,13 @@ export function MergeEditor() {
     | "theirs-only"
     | "unknown";
   const [conflictKind, setConflictKind] = useState<ConflictKind | null>(null);
+  // Rename target on the "deleting" side, when the apparent deletion is
+  // actually a rename git's detection didn't fold together. Also carries
+  // the renamed file's new content so the diff view can show it.
+  const [renameInfo, setRenameInfo] = useState<{
+    newPath: string;
+    newContent: string;
+  } | null>(null);
 
   const oursEditorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
   const resultEditorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
@@ -128,6 +135,7 @@ export function MergeEditor() {
     if (!file) return;
     setLoading(true);
     setConflictKind(null);
+    setRenameInfo(null);
     historyRef.current = [];
     void (async () => {
       try {
@@ -154,6 +162,30 @@ export function MergeEditor() {
         } else {
           setRegions([]);
           setResult("");
+          // When one side looks "deleted", it may actually be a rename
+          // git's detection didn't auto-fold. Ask git (with -M) whether
+          // the "deleting" side in fact moved the file, and if so load
+          // the content at the new path so the diff view can show the
+          // real comparison ("your modifications at X" vs "renamed +
+          // possibly modified at Y").
+          const renameSide =
+            kindRes === "deleted-by-them"
+              ? "theirs"
+              : kindRes === "deleted-by-us"
+                ? "ours"
+                : null;
+          if (renameSide) {
+            const newPath = await unwrap(
+              window.gitApi.findRenameTarget(file, renameSide),
+            );
+            if (newPath) {
+              const ref = renameSide === "theirs" ? "MERGE_HEAD" : "HEAD";
+              const newContent = await unwrap(
+                window.gitApi.fileAtRef(ref, newPath),
+              );
+              setRenameInfo({ newPath, newContent });
+            }
+          }
         }
       } catch (e) {
         toast("error", e instanceof Error ? e.message : String(e));
@@ -550,6 +582,7 @@ export function MergeEditor() {
           ours={ours}
           base={base}
           theirs={theirs}
+          renameInfo={renameInfo}
           language={language}
           onResolve={resolveSpecial}
         />
@@ -672,6 +705,7 @@ function ConflictChoicePanel({
   ours,
   base,
   theirs,
+  renameInfo,
   language,
   onResolve,
 }: {
@@ -688,9 +722,16 @@ function ConflictChoicePanel({
   ours: string;
   base: string;
   theirs: string;
+  renameInfo: { newPath: string; newContent: string } | null;
   language: string;
   onResolve: (choice: "keep-ours" | "keep-theirs" | "delete") => void;
 }) {
+  // A detected rename reframes a "deleted" classification — the file
+  // didn't disappear, it moved. We surface that with different copy
+  // (summary text + action labels) but reuse the same action choices
+  // underneath (the git commands don't change; only the framing does).
+  const renamedOnTheirs = !!renameInfo && kind === "deleted-by-them";
+  const renamedOnOurs = !!renameInfo && kind === "deleted-by-us";
   type Action = {
     choice: "keep-ours" | "keep-theirs" | "delete";
     label: string;
@@ -700,6 +741,21 @@ function ConflictChoicePanel({
   const actions: Action[] = (() => {
     switch (kind) {
       case "deleted-by-us":
+        if (renamedOnOurs && renameInfo) {
+          return [
+            {
+              choice: "keep-theirs",
+              label: `Keep the old path (${theirsBranch})`,
+              hint: `Restore ${file} and drop the rename we made to ${renameInfo.newPath}.`,
+            },
+            {
+              choice: "delete",
+              label: `Accept the rename to ${renameInfo.newPath}`,
+              hint: `Keep our rename; this path is removed and the renamed file stays.`,
+              danger: true,
+            },
+          ];
+        }
         return [
           {
             choice: "keep-theirs",
@@ -714,6 +770,21 @@ function ConflictChoicePanel({
           },
         ];
       case "deleted-by-them":
+        if (renamedOnTheirs && renameInfo) {
+          return [
+            {
+              choice: "keep-ours",
+              label: `Keep our version at ${file}`,
+              hint: `Block the rename; your changes stay at the original path.`,
+            },
+            {
+              choice: "delete",
+              label: `Accept the rename to ${renameInfo.newPath}`,
+              hint: `Remove ${file}; the renamed version on ${theirsBranch} is used instead.`,
+              danger: true,
+            },
+          ];
+        }
         return [
           {
             choice: "keep-ours",
@@ -766,6 +837,12 @@ function ConflictChoicePanel({
   })();
 
   const summary = (() => {
+    if (renamedOnTheirs && renameInfo) {
+      return `This file was renamed to ${renameInfo.newPath} on ${theirsBranch}, and modified on ${oursBranch}.`;
+    }
+    if (renamedOnOurs && renameInfo) {
+      return `This file was renamed to ${renameInfo.newPath} on ${oursBranch}, and modified on ${theirsBranch}.`;
+    }
     switch (kind) {
       case "deleted-by-us":
         return `This file was deleted on ${oursBranch} but modified on ${theirsBranch}.`;
@@ -783,13 +860,35 @@ function ConflictChoicePanel({
     }
   })();
 
-  // What the user really needs to see depends on which stages exist:
-  //   deleted-by-us  → compare base vs theirs (what would come in)
-  //   deleted-by-them→ compare base vs ours   (what we'd be losing)
-  //   both-added     → compare ours vs theirs (the two rival adds)
-  //   ours-only      → show ours (single)
-  //   theirs-only    → show theirs (single)
+  // What the user really needs to see depends on which stages exist
+  // and whether the "delete" was actually a rename:
+  //   rename on theirs → our modifications at old path vs renamed file
+  //                      content on theirs (so user sees what moved)
+  //   rename on ours   → ours content at renamed path vs theirs at old
+  //   deleted-by-us    → compare base vs theirs
+  //   deleted-by-them  → compare base vs ours
+  //   both-added       → compare ours vs theirs
+  //   ours-only        → show ours
+  //   theirs-only      → show theirs
   const compare = (() => {
+    if (renamedOnTheirs && renameInfo) {
+      return {
+        mode: "diff" as const,
+        originalLabel: `${oursBranch} — ${file}`,
+        modifiedLabel: `${theirsBranch} — ${renameInfo.newPath}`,
+        original: ours,
+        modified: renameInfo.newContent,
+      };
+    }
+    if (renamedOnOurs && renameInfo) {
+      return {
+        mode: "diff" as const,
+        originalLabel: `${theirsBranch} — ${file}`,
+        modifiedLabel: `${oursBranch} — ${renameInfo.newPath}`,
+        original: theirs,
+        modified: renameInfo.newContent,
+      };
+    }
     switch (kind) {
       case "deleted-by-us":
         return {
@@ -821,9 +920,6 @@ function ConflictChoicePanel({
         return { mode: "single" as const, label: theirsBranch, content: theirs };
       case "unknown":
       default:
-        // If anything was fetched, prefer an ours-vs-theirs comparison;
-        // otherwise just bail to a plain empty view rather than
-        // tripping Monaco with undefined content.
         return ours || theirs
           ? {
               mode: "diff" as const,

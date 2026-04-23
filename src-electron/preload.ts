@@ -126,6 +126,8 @@ const gitApi = {
     invoke<void>(GIT.RESOLVE_SIDE, { path: filePath, side }),
   resolveWithDelete: (filePath: string) =>
     invoke<void>(GIT.RESOLVE_DELETE, filePath),
+  findRenameTarget: (filePath: string, side: "ours" | "theirs") =>
+    invoke<string | null>(GIT.FIND_RENAME_TARGET, { path: filePath, side }),
 
   stashList: () => invoke<Stash[]>(GIT.STASH_LIST),
   stashApply: (index: number) => invoke<void>(GIT.STASH_APPLY, index),

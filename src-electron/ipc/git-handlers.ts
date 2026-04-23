@@ -187,6 +187,11 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   ipc.handle(GIT.RESOLVE_DELETE, (_e, p: string) =>
     wrap(() => exec(repo).resolveWithDelete(p)),
   );
+  ipc.handle(
+    GIT.FIND_RENAME_TARGET,
+    (_e, { path: p, side }: { path: string; side: "ours" | "theirs" }) =>
+      wrap(() => exec(repo).findRenameTarget(p, side)),
+  );
 
   ipc.handle(GIT.STASH_LIST, () => wrap(() => exec(repo).stashList()));
   ipc.handle(GIT.STASH_APPLY, (_e, index: number) => wrap(() => exec(repo).stashApply(index)));

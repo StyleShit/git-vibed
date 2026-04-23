@@ -45,6 +45,7 @@ export const GIT = {
   CONFLICT_KIND: "git:conflict-kind",
   RESOLVE_SIDE: "git:resolve-side",
   RESOLVE_DELETE: "git:resolve-delete",
+  FIND_RENAME_TARGET: "git:find-rename-target",
   CHERRY_PICK: "git:cherry-pick",
   REVERT: "git:revert",
   RESET: "git:reset",
