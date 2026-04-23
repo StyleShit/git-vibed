@@ -725,18 +725,21 @@ export class GitExecutor {
 
   async diff(file: string, opts: { staged?: boolean; commitA?: string; commitB?: string }): Promise<string> {
     // Untracked files don't show up under plain `git diff` since git hasn't
-    // recorded them yet — the renderer was seeing an empty diff (hence
-    // the "empty + question mark" state). Detect the untracked case via
-    // status and synthesize a diff from /dev/null so every line renders
-    // as an addition, which is what the user expects.
+    // recorded them yet — without this branch the renderer sees an empty
+    // diff. We decide "untracked" by asking git directly: a file is
+    // untracked when it exists in the worktree but has no index entry
+    // (ls-files --error-unmatch exits non-zero). This is more reliable
+    // than re-walking status(), which can drift on large trees.
     if (!opts.staged && !opts.commitA) {
       try {
-        const s = await this.git.status();
-        if (s.not_added.includes(file)) {
+        await this.git.raw(["ls-files", "--error-unmatch", "--", file]);
+      } catch {
+        // ls-files errored → not in the index. If the file exists in the
+        // worktree, render it as a from-scratch addition.
+        const abs = path.join(this.repoPath, file);
+        if (fs.existsSync(abs)) {
           return await this.untrackedDiff(file);
         }
-      } catch {
-        // Fall through to the normal diff path — status was best-effort.
       }
     }
     const args = ["diff", "--no-color", "-U3"];
@@ -807,21 +810,72 @@ export class GitExecutor {
   }
 
   // Read .git/MERGE_MSG so the commit panel can pre-fill the standard
-  // "Merge branch 'X' into 'Y'" subject while a merge is in progress.
-  // Returns "" when the file is absent (no merge) or unreadable.
+  // "Merge branch 'X' into Y" subject while a merge is in progress.
+  // Falls back to building one from MERGE_HEAD + current branch when the
+  // file is missing or only has a bare "Merge branch 'X'" without the
+  // "into <current>" suffix — we always want both sides visible.
   async mergeMessage(): Promise<string> {
     try {
       const gitDir = path.join(this.repoPath, ".git");
       const msgPath = path.join(gitDir, "MERGE_MSG");
-      if (!fs.existsSync(msgPath)) return "";
-      const raw = fs.readFileSync(msgPath, "utf8");
-      // Strip the trailing "# Conflicts:" comment block git appends when
-      // there are conflicts — it's meta, not part of the commit message.
-      return raw
-        .split(/\r?\n/)
-        .filter((l) => !l.startsWith("#"))
-        .join("\n")
-        .trimEnd();
+      let cleaned = "";
+      if (fs.existsSync(msgPath)) {
+        const raw = fs.readFileSync(msgPath, "utf8");
+        // Strip the "# Conflicts:" comment block git appends when there
+        // are conflicts — it's meta, not part of the commit message.
+        cleaned = raw
+          .split(/\r?\n/)
+          .filter((l) => !l.startsWith("#"))
+          .join("\n")
+          .trimEnd();
+      }
+
+      // Figure out the target (current) branch so we can ensure "into Y"
+      // is present in the subject.
+      let currentBranch = "";
+      try {
+        const head = fs.readFileSync(path.join(gitDir, "HEAD"), "utf8").trim();
+        const m = head.match(/^ref:\s*refs\/heads\/(.+)$/);
+        if (m) currentBranch = m[1];
+      } catch {
+        /* detached / unreadable */
+      }
+
+      // If the first line is "Merge branch 'X'" with no "into ..." tail,
+      // append "into <currentBranch>" so the subject shows both sides.
+      if (cleaned && currentBranch) {
+        const lines = cleaned.split("\n");
+        const first = lines[0] ?? "";
+        if (/^Merge (branch|remote-tracking branch|tag|commit) '[^']+'$/.test(first)) {
+          lines[0] = `${first} into ${currentBranch}`;
+          cleaned = lines.join("\n");
+        }
+      }
+
+      if (cleaned) return cleaned;
+
+      // Fallback: no MERGE_MSG on disk. Synthesize one from MERGE_HEAD.
+      const mergeHeadPath = path.join(gitDir, "MERGE_HEAD");
+      if (!fs.existsSync(mergeHeadPath)) return "";
+      const sourceSha = fs
+        .readFileSync(mergeHeadPath, "utf8")
+        .split(/\r?\n/)[0]
+        ?.trim();
+      let sourceName = sourceSha ? sourceSha.slice(0, 7) : "";
+      try {
+        const resolved = await this.git.raw([
+          "name-rev",
+          "--name-only",
+          "--no-undefined",
+          sourceSha,
+        ]);
+        if (resolved.trim()) sourceName = resolved.trim();
+      } catch {
+        /* keep the short SHA */
+      }
+      return currentBranch
+        ? `Merge branch '${sourceName}' into ${currentBranch}`
+        : `Merge branch '${sourceName}'`;
     } catch {
       return "";
     }
