@@ -1,11 +1,15 @@
 import { useMemo } from "react";
 import { Menu } from "@base-ui-components/react/menu";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Commit } from "@shared/types";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 import { gitStashesOptions } from "../../queries/gitApi";
+import {
+  stashApplyMutation,
+  stashDropMutation,
+  stashPopMutation,
+} from "../../queries/mutations";
 import { useConfirm } from "../ui/Confirm";
 
 // Context menu shown when the user right-clicks a commit that also
@@ -26,9 +30,11 @@ export function StashContextMenu({
   onClose: () => void;
 }) {
   const toast = useUI((s) => s.toast);
-  const refreshAll = useRepo((s) => s.refreshAll);
   const activePath = useActiveTab()?.path;
   const stashes = useQuery(gitStashesOptions(activePath)).data ?? [];
+  const stashApplyMut = useMutation(stashApplyMutation(activePath ?? ""));
+  const stashDropMut = useMutation(stashDropMutation(activePath ?? ""));
+  const stashPopMut = useMutation(stashPopMutation(activePath ?? ""));
   const confirmDialog = useConfirm();
 
   const anchor = useMemo(
@@ -51,7 +57,6 @@ export function StashContextMenu({
     try {
       await fn();
       toast("success", label);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -62,9 +67,7 @@ export function StashContextMenu({
       toast("error", "No matching stash entry");
       return;
     }
-    await run("Applied stash", () =>
-      unwrap(window.gitApi.stashApply(stashEntry.index)),
-    );
+    await run("Applied stash", () => stashApplyMut.mutateAsync(stashEntry.index));
   }
 
   async function pop() {
@@ -73,11 +76,11 @@ export function StashContextMenu({
       return;
     }
     if (stashEntry.index === 0) {
-      await run("Popped stash", () => unwrap(window.gitApi.stashPop()));
+      await run("Popped stash", () => stashPopMut.mutateAsync());
     } else {
       await run("Popped stash", async () => {
-        await unwrap(window.gitApi.stashApply(stashEntry.index));
-        await unwrap(window.gitApi.stashDrop(stashEntry.index));
+        await stashApplyMut.mutateAsync(stashEntry.index);
+        await stashDropMut.mutateAsync(stashEntry.index);
       });
     }
   }
@@ -94,9 +97,7 @@ export function StashContextMenu({
       danger: true,
     });
     if (!ok) return;
-    await run("Dropped stash", () =>
-      unwrap(window.gitApi.stashDrop(stashEntry.index)),
-    );
+    await run("Dropped stash", () => stashDropMut.mutateAsync(stashEntry.index));
   }
 
   function copyHash() {

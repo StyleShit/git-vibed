@@ -1,9 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useActiveTab, useRepo } from "../../stores/repo";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 import { gitStashesOptions } from "../../queries/gitApi";
+import {
+  stashApplyMutation,
+  stashDropMutation,
+  stashPopMutation,
+} from "../../queries/mutations";
 import { StashIcon, BranchIcon } from "../ui/Icons";
 import { useConfirm } from "../ui/Confirm";
 import { Tooltip } from "../ui/Tooltip";
@@ -12,7 +16,9 @@ import type { Stash } from "@shared/types";
 export function StashList({ filter }: { filter: string }) {
   const activePath = useActiveTab()?.path;
   const stashes = useQuery(gitStashesOptions(activePath)).data ?? [];
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const stashApplyMut = useMutation(stashApplyMutation(activePath ?? ""));
+  const stashDropMut = useMutation(stashDropMutation(activePath ?? ""));
+  const stashPopMut = useMutation(stashPopMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
   const selectStash = useUI((s) => s.selectStash);
@@ -32,13 +38,12 @@ export function StashList({ filter }: { filter: string }) {
     setBusy(stash.index);
     try {
       if (pop && stash.index === 0) {
-        await unwrap(window.gitApi.stashPop());
+        await stashPopMut.mutateAsync();
       } else {
-        await unwrap(window.gitApi.stashApply(stash.index));
-        if (pop) await unwrap(window.gitApi.stashDrop(stash.index));
+        await stashApplyMut.mutateAsync(stash.index);
+        if (pop) await stashDropMut.mutateAsync(stash.index);
       }
       toast("success", pop ? "Popped stash" : "Applied stash");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {
@@ -56,9 +61,8 @@ export function StashList({ filter }: { filter: string }) {
     if (!ok) return;
     setBusy(stash.index);
     try {
-      await unwrap(window.gitApi.stashDrop(stash.index));
+      await stashDropMut.mutateAsync(stash.index);
       toast("success", "Dropped stash");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {

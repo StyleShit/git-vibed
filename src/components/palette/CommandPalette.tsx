@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { useActiveTab, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
@@ -14,6 +14,11 @@ import {
   gitWorktreesOptions,
   prsOptions,
 } from "../../queries/gitApi";
+import {
+  stashApplyMutation,
+  stashCreateMutation,
+  stashPopMutation,
+} from "../../queries/mutations";
 import {
   BranchIcon,
   CommitIcon,
@@ -61,6 +66,9 @@ export function CommandPalette() {
   const ghAvailable = useQuery(ghAvailableOptions(activePath)).data ?? false;
   const prs =
     useQuery(prsOptions(activePath, prStateFilter, ghAvailable)).data ?? [];
+  const stashCreateMut = useMutation(stashCreateMutation(activePath ?? ""));
+  const stashPopMut = useMutation(stashPopMutation(activePath ?? ""));
+  const stashApplyMut = useMutation(stashApplyMutation(activePath ?? ""));
   const refreshAll = useRepo((s) => s.refreshAll);
   const openRepo = useRepo((s) => s.openRepo);
   const pullStrategy = useSettings((s) => s.defaultPullStrategy);
@@ -174,9 +182,8 @@ export function CommandPalette() {
       icon: <StashIcon className="size-3.5 text-neutral-400" />,
       run: async () => {
         try {
-          await unwrap(window.gitApi.stash());
+          await stashCreateMut.mutateAsync(undefined);
           toast("success", "Stashed");
-          await refreshAll();
         } catch (e) {
           toast("error", e instanceof Error ? e.message : String(e));
         }
@@ -190,9 +197,8 @@ export function CommandPalette() {
       icon: <StashIcon className="size-3.5 text-neutral-400" />,
       run: async () => {
         try {
-          await unwrap(window.gitApi.stashPop());
+          await stashPopMut.mutateAsync();
           toast("success", "Popped");
-          await refreshAll();
         } catch (e) {
           toast("error", e instanceof Error ? e.message : String(e));
         }
@@ -260,9 +266,8 @@ export function CommandPalette() {
         icon: <StashIcon className="size-3.5 text-neutral-400" />,
         run: async () => {
           try {
-            await unwrap(window.gitApi.stashApply(s.index));
+            await stashApplyMut.mutateAsync(s.index);
             toast("success", "Applied stash");
-            await refreshAll();
           } catch (e) {
             toast("error", e instanceof Error ? e.message : String(e));
           }

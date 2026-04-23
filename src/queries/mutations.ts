@@ -1,7 +1,11 @@
 import { type UseMutationOptions } from "@tanstack/react-query";
 import { unwrap } from "../lib/ipc";
 import { queryClient } from "./client";
-import { gitStatusOptions } from "./gitApi";
+import {
+  gitLogOptions,
+  gitStashesOptions,
+  gitStatusOptions,
+} from "./gitApi";
 
 // Invalidate a list of query keys in one go. Helper because every
 // onSuccess invalidates one or more keys and the boilerplate adds up.
@@ -85,5 +89,64 @@ export function markResolvedMutation(
       await unwrap(window.gitApi.markResolved(files));
     },
     onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+  };
+}
+
+// --- Stashes -------------------------------------------------------------
+
+type StashInput = { message?: string; files?: string[] } | string | undefined;
+
+function afterStashMutation(path: string) {
+  // Every stash mutation moves both the WIP state (status) and the stash
+  // list; stashPop/stashApply can also surface new WIP files from the
+  // stash, which changes the working tree.
+  invalidate([
+    gitStatusOptions(path).queryKey,
+    gitStashesOptions(path).queryKey,
+    gitLogOptions(path).queryKey,
+  ]);
+}
+
+export function stashCreateMutation(
+  path: string,
+): UseMutationOptions<void, Error, StashInput> {
+  return {
+    mutationFn: async (input) => {
+      await unwrap(window.gitApi.stash(input));
+    },
+    onSuccess: () => afterStashMutation(path),
+  };
+}
+
+export function stashPopMutation(
+  path: string,
+): UseMutationOptions<void, Error, void> {
+  return {
+    mutationFn: async () => {
+      await unwrap(window.gitApi.stashPop());
+    },
+    onSuccess: () => afterStashMutation(path),
+  };
+}
+
+export function stashApplyMutation(
+  path: string,
+): UseMutationOptions<void, Error, number> {
+  return {
+    mutationFn: async (index) => {
+      await unwrap(window.gitApi.stashApply(index));
+    },
+    onSuccess: () => afterStashMutation(path),
+  };
+}
+
+export function stashDropMutation(
+  path: string,
+): UseMutationOptions<void, Error, number> {
+  return {
+    mutationFn: async (index) => {
+      await unwrap(window.gitApi.stashDrop(index));
+    },
+    onSuccess: () => afterStashMutation(path),
   };
 }

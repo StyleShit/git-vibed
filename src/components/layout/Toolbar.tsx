@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
@@ -10,6 +10,10 @@ import {
   gitStatusOptions,
   gitUndoOptions,
 } from "../../queries/gitApi";
+import {
+  stashCreateMutation,
+  stashPopMutation,
+} from "../../queries/mutations";
 import {
   BranchIcon,
   ChevronDownIcon,
@@ -40,6 +44,8 @@ export function Toolbar() {
   const branches = useQuery(gitBranchesOptions(path)).data ?? [];
   const undo =
     useQuery(gitUndoOptions(path)).data ?? { canUndo: false, canRedo: false };
+  const stashCreateMut = useMutation(stashCreateMutation(path ?? ""));
+  const stashPopMut = useMutation(stashPopMutation(path ?? ""));
   const toast = useUI((s) => s.toast);
   const setCommandPalette = useUI((s) => s.setCommandPalette);
   const view = useUI((s) => s.view);
@@ -120,9 +126,8 @@ export function Toolbar() {
   async function runStash() {
     setBusy("stash");
     try {
-      await unwrap(window.gitApi.stash());
+      await stashCreateMut.mutateAsync(undefined);
       toast("success", "Stashed changes");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {
@@ -133,9 +138,8 @@ export function Toolbar() {
   async function runPop() {
     setBusy("pop");
     try {
-      await unwrap(window.gitApi.stashPop());
+      await stashPopMut.mutateAsync();
       toast("success", "Popped stash");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {

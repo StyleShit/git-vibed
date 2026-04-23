@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useActiveTab, useRepo } from "../../stores/repo";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { gitStashesOptions } from "../../queries/gitApi";
+import {
+  stashApplyMutation,
+  stashDropMutation,
+  stashPopMutation,
+} from "../../queries/mutations";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { maybe, unwrap } from "../../lib/ipc";
@@ -28,7 +33,9 @@ export function StashDetail({ index }: { index: number }) {
   const selectStash = useUI((s) => s.selectStash);
   const selectStashFile = useUI((s) => s.selectStashFile);
   const selectedStashFile = useUI((s) => s.selectedStashFile);
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const stashApplyMut = useMutation(stashApplyMutation(activePath ?? ""));
+  const stashDropMut = useMutation(stashDropMutation(activePath ?? ""));
+  const stashPopMut = useMutation(stashPopMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
   const [files, setFiles] = useState<FileDiff[] | null>(null);
@@ -98,7 +105,6 @@ export function StashDetail({ index }: { index: number }) {
     try {
       await fn();
       toast("success", msg);
-      await refreshAll();
       if (close) selectStash(null);
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
@@ -142,7 +148,7 @@ export function StashDetail({ index }: { index: number }) {
           <button
             disabled={busy}
             onClick={() =>
-              run(() => unwrap(window.gitApi.stashApply(stash.index)), "Applied")
+              run(() => stashApplyMut.mutateAsync(stash.index), "Applied")
             }
             className="rounded bg-neutral-800 px-2 py-1 text-neutral-100 hover:bg-neutral-700 disabled:opacity-50"
           >
@@ -155,13 +161,12 @@ export function StashDetail({ index }: { index: number }) {
               setBusy(true);
               try {
                 if (stash.index === 0) {
-                  await unwrap(window.gitApi.stashPop());
+                  await stashPopMut.mutateAsync();
                 } else {
-                  await unwrap(window.gitApi.stashApply(stash.index));
-                  await unwrap(window.gitApi.stashDrop(stash.index));
+                  await stashApplyMut.mutateAsync(stash.index);
+                  await stashDropMut.mutateAsync(stash.index);
                 }
                 toast("success", "Popped");
-                await refreshAll();
                 selectStash(null);
               } catch (e) {
                 toast("error", e instanceof Error ? e.message : String(e));
@@ -185,7 +190,7 @@ export function StashDetail({ index }: { index: number }) {
               });
               if (!ok) return;
               void run(
-                () => unwrap(window.gitApi.stashDrop(stash.index)),
+                () => stashDropMut.mutateAsync(stash.index),
                 "Dropped",
                 true,
               );

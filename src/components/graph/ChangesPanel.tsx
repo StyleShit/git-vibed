@@ -2,10 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { buildTree, type TreeNode } from "../../lib/file-tree";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
-import { unwrap } from "../../lib/ipc";
 import {
   gitStatusOptions,
   gitWorktreesOptions,
@@ -13,6 +12,7 @@ import {
 import {
   discardMutation,
   stageMutation,
+  stashCreateMutation,
   unstageMutation,
 } from "../../queries/mutations";
 import { useConfirm } from "../ui/Confirm";
@@ -38,11 +38,10 @@ export function ChangesPanel() {
   const repoPath = activeTab?.path ?? "";
   const status = useQuery(gitStatusOptions(activeTab?.path)).data ?? null;
   const worktrees = useQuery(gitWorktreesOptions(activeTab?.path)).data ?? [];
-  const refreshStatus = useRepo((s) => s.refreshStatus);
-  const refreshStashes = useRepo((s) => s.refreshStashes);
   const stageMut = useMutation(stageMutation(repoPath));
   const unstageMut = useMutation(unstageMutation(repoPath));
   const discardMut = useMutation(discardMutation(repoPath));
+  const stashCreateMut = useMutation(stashCreateMutation(repoPath));
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
   const selectWipFile = useUI((s) => s.selectWipFile);
@@ -150,7 +149,7 @@ export function ChangesPanel() {
   const stashFiles = async (files: string[]) => {
     if (files.length === 0) return;
     try {
-      await unwrap(window.gitApi.stash({ files }));
+      await stashCreateMut.mutateAsync({ files });
       toast("success", `Stashed ${files.length} file${files.length === 1 ? "" : "s"}`);
       // If the file currently shown in the main diff viewer was stashed,
       // it's no longer in the working tree — close it so the user isn't
@@ -158,8 +157,6 @@ export function ChangesPanel() {
       if (selectedWipFile && files.includes(selectedWipFile.path)) {
         selectWipFile(null);
       }
-      await refreshStatus();
-      await refreshStashes();
       clearMulti();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
