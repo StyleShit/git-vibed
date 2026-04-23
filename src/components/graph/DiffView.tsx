@@ -298,7 +298,7 @@ function SplitLine({
         selected ? "outline outline-1 -outline-offset-1 outline-indigo-500/60" : ""
       }`}
     >
-      <span className="mr-2 inline-block w-10 select-none px-1 text-right text-neutral-600">
+      <span className="mr-2 inline-block w-10 select-none px-1 text-right text-neutral-600 flex-shrink-0">
         {ln ?? ""}
       </span>
       <span
