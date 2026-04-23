@@ -16,6 +16,7 @@ import {
   ChevronRightIcon,
 } from "../ui/Icons";
 import { Avatar } from "../ui/Avatar";
+import { Tooltip } from "../ui/Tooltip";
 import type { Commit, CommitFile, FileStatus, PullRequest } from "@shared/types";
 
 // Right-hand panel shown when a commit is selected in the graph.
@@ -109,26 +110,28 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
         </div>
       ) : (
         <div className="flex h-8 shrink-0 items-center justify-end border-b border-neutral-800 bg-neutral-900/40 px-2 text-xs">
-          <button
-            onClick={onClose}
-            title="Close"
-            className="rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
-          >
-            <CloseIcon className="size-3.5" />
-          </button>
+          <Tooltip content="Close">
+            <button
+              onClick={onClose}
+              className="rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+            >
+              <CloseIcon className="size-3.5" />
+            </button>
+          </Tooltip>
         </div>
       )}
       <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
         <div className="flex items-center gap-2 text-xs text-neutral-400">
           <span>commit</span>
-          <button
-            onClick={copyHash}
-            className="mono flex items-center gap-1 rounded bg-neutral-800 px-1.5 py-0.5 text-neutral-200 hover:bg-neutral-700"
-            title="Copy hash"
-          >
-            {commit.hash.slice(0, 7)}
-            <CopyIcon className="size-3 text-neutral-400" />
-          </button>
+          <Tooltip content="Copy hash">
+            <button
+              onClick={copyHash}
+              className="mono flex items-center gap-1 rounded bg-neutral-800 px-1.5 py-0.5 text-neutral-200 hover:bg-neutral-700"
+            >
+              {commit.hash.slice(0, 7)}
+              <CopyIcon className="size-3 text-neutral-400" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 

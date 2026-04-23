@@ -18,6 +18,7 @@ import {
 } from "../../lib/merge-engine";
 import { monacoLanguageForPath } from "../../lib/monaco-language";
 import { useConfirm } from "../ui/Confirm";
+import { Tooltip } from "../ui/Tooltip";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -1127,24 +1128,26 @@ function ConflictGutter({
             className="absolute left-1/2 flex -translate-x-1/2 flex-col gap-0.5"
             style={{ top: Math.max(0, a.top) }}
           >
-            <button
-              onClick={() => onAccept(a.idx)}
-              title={side === "ours" ? "Accept ours" : "Accept theirs"}
-              className="flex h-[18px] w-6 items-center justify-center rounded border border-emerald-600/40 bg-emerald-500/15 text-[11px] text-emerald-300 transition hover:bg-emerald-500/30"
-            >
-              {side === "ours" ? "»" : "«"}
-            </button>
-            <button
-              onClick={() => onReject(a.idx)}
-              title={side === "ours" ? "Drop ours" : "Drop theirs"}
-              className={`flex h-[18px] w-6 items-center justify-center rounded border text-[11px] transition ${
-                done
-                  ? "border-neutral-700 bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
-                  : "border-red-600/40 bg-red-500/15 text-red-300 hover:bg-red-500/30"
-              }`}
-            >
-              ✕
-            </button>
+            <Tooltip content={side === "ours" ? "Accept ours" : "Accept theirs"}>
+              <button
+                onClick={() => onAccept(a.idx)}
+                className="flex h-[18px] w-6 items-center justify-center rounded border border-emerald-600/40 bg-emerald-500/15 text-[11px] text-emerald-300 transition hover:bg-emerald-500/30"
+              >
+                {side === "ours" ? "»" : "«"}
+              </button>
+            </Tooltip>
+            <Tooltip content={side === "ours" ? "Drop ours" : "Drop theirs"}>
+              <button
+                onClick={() => onReject(a.idx)}
+                className={`flex h-[18px] w-6 items-center justify-center rounded border text-[11px] transition ${
+                  done
+                    ? "border-neutral-700 bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+                    : "border-red-600/40 bg-red-500/15 text-red-300 hover:bg-red-500/30"
+                }`}
+              >
+                ✕
+              </button>
+            </Tooltip>
           </div>
         );
       })}
@@ -1222,18 +1225,18 @@ function MergeToolbar({
           </span>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {specialActions.map((a) => (
-              <button
-                key={a.choice}
-                onClick={() => onSpecialAction(a.choice)}
-                title={a.hint}
-                className={`rounded-md border px-3 py-1.5 text-sm font-medium transition ${
-                  a.danger
-                    ? "border-red-500/30 text-red-200 hover:bg-red-500/10"
-                    : "border-neutral-700 text-neutral-100 hover:border-indigo-500/40 hover:bg-indigo-500/10"
-                }`}
-              >
-                {a.label}
-              </button>
+              <Tooltip key={a.choice} content={a.hint}>
+                <button
+                  onClick={() => onSpecialAction(a.choice)}
+                  className={`rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+                    a.danger
+                      ? "border-red-500/30 text-red-200 hover:bg-red-500/10"
+                      : "border-neutral-700 text-neutral-100 hover:border-indigo-500/40 hover:bg-indigo-500/10"
+                  }`}
+                >
+                  {a.label}
+                </button>
+              </Tooltip>
             ))}
             <ToolbarIconButton onClick={onClose} title="Close merge editor">
               <CloseIcon className="size-4" />
@@ -1306,14 +1309,15 @@ function ToolbarButton({
 }) {
   const title = hint ? `${label} — ${hint}` : label;
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="flex min-w-[56px] flex-col items-center rounded px-2 py-1 text-[10px] text-neutral-300 transition hover:bg-neutral-800 hover:text-neutral-100"
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
+    <Tooltip content={title}>
+      <button
+        onClick={onClick}
+        className="flex min-w-[56px] flex-col items-center rounded px-2 py-1 text-[10px] text-neutral-300 transition hover:bg-neutral-800 hover:text-neutral-100"
+      >
+        {icon}
+        <span>{label}</span>
+      </button>
+    </Tooltip>
   );
 }
 
@@ -1327,12 +1331,13 @@ function ToolbarIconButton({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="rounded p-1.5 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
-    >
-      {children}
-    </button>
+    <Tooltip content={title}>
+      <button
+        onClick={onClick}
+        className="rounded p-1.5 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }

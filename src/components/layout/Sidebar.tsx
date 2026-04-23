@@ -19,6 +19,7 @@ import { BranchCreateDialog } from "../branches/BranchCreateDialog";
 import { AddRemoteDialog } from "../remotes/AddRemoteDialog";
 import { TagCreateDialog } from "../tags/TagCreateDialog";
 import { WorktreeAddDialog } from "../worktrees/WorktreeAddDialog";
+import { Tooltip } from "../ui/Tooltip";
 
 type SectionId = "local" | "remote" | "stashes" | "worktrees" | "prs" | "tags";
 
@@ -266,12 +267,13 @@ function HeaderActionButton({
   title: string;
 }) {
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="rounded p-0.5 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-100"
-    >
-      {children}
-    </button>
+    <Tooltip content={title}>
+      <button
+        onClick={onClick}
+        className="rounded p-0.5 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-100"
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }

@@ -4,6 +4,7 @@ import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { StashIcon, BranchIcon } from "../ui/Icons";
 import { useConfirm } from "../ui/Confirm";
+import { Tooltip } from "../ui/Tooltip";
 import type { Stash } from "@shared/types";
 
 export function StashList({ filter }: { filter: string }) {
@@ -128,30 +129,33 @@ function StashRow({
         className="absolute inset-y-0.5 right-1 hidden items-center gap-0.5 rounded bg-neutral-800/95 px-1 shadow-lg backdrop-blur-sm group-hover:flex"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          onClick={() => onApply(stash, false)}
-          disabled={busy}
-          className="rounded px-1.5 py-0.5 text-[10px] text-neutral-300 hover:bg-neutral-700 hover:text-neutral-100"
-          title="Apply"
-        >
-          apply
-        </button>
-        <button
-          onClick={() => onApply(stash, true)}
-          disabled={busy}
-          className="rounded px-1.5 py-0.5 text-[10px] text-neutral-300 hover:bg-neutral-700 hover:text-neutral-100"
-          title="Pop (apply + drop)"
-        >
-          pop
-        </button>
-        <button
-          onClick={() => onDrop(stash)}
-          disabled={busy}
-          className="rounded px-1.5 py-0.5 text-[10px] text-red-400 hover:bg-neutral-700"
-          title="Drop"
-        >
-          drop
-        </button>
+        <Tooltip content="Apply">
+          <button
+            onClick={() => onApply(stash, false)}
+            disabled={busy}
+            className="rounded px-1.5 py-0.5 text-[10px] text-neutral-300 hover:bg-neutral-700 hover:text-neutral-100"
+          >
+            apply
+          </button>
+        </Tooltip>
+        <Tooltip content="Pop (apply + drop)">
+          <button
+            onClick={() => onApply(stash, true)}
+            disabled={busy}
+            className="rounded px-1.5 py-0.5 text-[10px] text-neutral-300 hover:bg-neutral-700 hover:text-neutral-100"
+          >
+            pop
+          </button>
+        </Tooltip>
+        <Tooltip content="Drop">
+          <button
+            onClick={() => onDrop(stash)}
+            disabled={busy}
+            className="rounded px-1.5 py-0.5 text-[10px] text-red-400 hover:bg-neutral-700"
+          >
+            drop
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useRepo, useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
+import { Tooltip } from "../ui/Tooltip";
 
 // -webkit-app-region doesn't inherit in all cases, so we set it explicitly on
 // every cell. On macOS (hiddenInset title-bar) the OS handles double-click to
@@ -74,33 +75,39 @@ export function TabBar() {
                 <span className="ml-1.5 text-[10px] text-neutral-500">· {branch}</span>
               )}
             </span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!tabHasConflicts) void closeTab(tab.path);
-              }}
-              disabled={tabHasConflicts}
-              title={tabHasConflicts ? "Cannot close tab with unresolved conflicts" : undefined}
-              className={`ml-auto rounded px-1 opacity-0 transition group-hover:opacity-100 ${
-                tabHasConflicts
-                  ? "cursor-not-allowed text-neutral-600"
-                  : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-100"
-              }`}
-              aria-label={`Close ${folder}`}
+            <Tooltip
+              content={
+                tabHasConflicts ? "Cannot close tab with unresolved conflicts" : "Close tab"
+              }
             >
-              ×
-            </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!tabHasConflicts) void closeTab(tab.path);
+                }}
+                disabled={tabHasConflicts}
+                className={`ml-auto rounded px-1 opacity-0 transition group-hover:opacity-100 ${
+                  tabHasConflicts
+                    ? "cursor-not-allowed text-neutral-600"
+                    : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-100"
+                }`}
+                aria-label={`Close ${folder}`}
+              >
+                ×
+              </button>
+            </Tooltip>
           </div>
         );
       })}
-      <button
-        onClick={openNew}
-        style={NO_DRAG}
-        className="flex items-center border-r border-neutral-800 px-3 text-lg text-neutral-500 hover:bg-neutral-900 hover:text-neutral-100"
-        title="Open another repository"
-      >
-        +
-      </button>
+      <Tooltip content="Open another repository">
+        <button
+          onClick={openNew}
+          style={NO_DRAG}
+          className="flex items-center border-r border-neutral-800 px-3 text-lg text-neutral-500 hover:bg-neutral-900 hover:text-neutral-100"
+        >
+          +
+        </button>
+      </Tooltip>
       {/* Spacer to fill the rest of the bar — draggable so the user always
           has a big target for dragging the window and double-click-to-zoom. */}
       <div className="flex-1" style={DRAG} />
