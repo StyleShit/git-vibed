@@ -21,8 +21,10 @@ import type {
   Check,
   RepoChangedEvent,
   FetchCompleteEvent,
+  FetchStartEvent,
   Stash,
   Tag,
+  UndoState,
   Worktree,
 } from "../src/shared/types.js";
 
@@ -43,6 +45,8 @@ const gitApi = {
     invoke<{ openPaths: string[]; activePath: string | null }>(GIT.SESSION_GET),
   sessionSet: (snap: { openPaths: string[]; activePath: string | null }) =>
     invoke<boolean>(GIT.SESSION_SET, snap),
+  setAutoFetchInterval: (ms: number) =>
+    invoke<number>(GIT.SET_AUTO_FETCH_INTERVAL, ms),
 
   status: () => invoke<RepoStatus>(GIT.STATUS),
   commit: (opts: CommitOptions) => invoke<string>(GIT.COMMIT, opts),
@@ -131,10 +135,19 @@ const gitApi = {
 
   commitFiles: (hash: string) => invoke<CommitFile[]>(GIT.COMMIT_FILES, hash),
 
+  undoHead: () => invoke<{ label: string | null }>(GIT.UNDO_HEAD),
+  redoHead: () => invoke<{ label: string | null }>(GIT.REDO_HEAD),
+  undoState: () => invoke<UndoState>(GIT.UNDO_STATE),
+
   onRepoChanged: (cb: (e: RepoChangedEvent) => void) => {
     const handler = (_: unknown, payload: RepoChangedEvent) => cb(payload);
     ipcRenderer.on(EVENTS.REPO_CHANGED, handler);
     return () => ipcRenderer.removeListener(EVENTS.REPO_CHANGED, handler);
+  },
+  onFetchStart: (cb: (e: FetchStartEvent) => void) => {
+    const handler = (_: unknown, payload: FetchStartEvent) => cb(payload);
+    ipcRenderer.on(EVENTS.FETCH_START, handler);
+    return () => ipcRenderer.removeListener(EVENTS.FETCH_START, handler);
   },
   onFetchComplete: (cb: (e: FetchCompleteEvent) => void) => {
     const handler = (_: unknown, payload: FetchCompleteEvent) => cb(payload);

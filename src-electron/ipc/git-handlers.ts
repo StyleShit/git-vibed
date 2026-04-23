@@ -215,4 +215,18 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   );
 
   ipc.handle(GIT.COMMIT_FILES, (_e, hash: string) => wrap(() => exec(repo).commitFiles(hash)));
+
+  ipc.handle(GIT.UNDO_HEAD, () => wrap(() => repo.require().headUndo()));
+  ipc.handle(GIT.REDO_HEAD, () => wrap(() => repo.require().headRedo()));
+  ipc.handle(GIT.UNDO_STATE, () =>
+    wrap(async () => {
+      try {
+        return await repo.require().undoState();
+      } catch {
+        // No active repo yet (e.g. called on startup before a tab is
+        // open). Return a neutral state instead of surfacing the error.
+        return { canUndo: false, canRedo: false };
+      }
+    }),
+  );
 }

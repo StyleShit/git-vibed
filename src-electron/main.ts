@@ -204,6 +204,13 @@ app.whenReady().then(() => {
     return { ok: true as const, data: true };
   });
 
+  ipcMain.handle(GIT.SET_AUTO_FETCH_INTERVAL, (_e, ms: number) => {
+    // Clamp to keep a misconfigured store from pinning the CPU on a 0ms loop.
+    const clamped = Math.max(10_000, Math.floor(Number(ms) || 0));
+    repoManager?.setAutoFetchInterval(clamped);
+    return { ok: true as const, data: clamped };
+  });
+
   // Track new repo opens so the sidebar's recent list stays warm.
   repoManager.onRepoOpen((p) => addRecentRepo(p));
 
