@@ -797,6 +797,61 @@ export class GitExecutor {
     }
   }
 
+  // Classify an unmerged path by inspecting which index stages exist.
+  //   stage 1 = common ancestor (base)
+  //   stage 2 = ours (HEAD)
+  //   stage 3 = theirs (MERGE_HEAD)
+  // The set of stages present uniquely identifies the conflict kind:
+  //   {1,2,3} both sides modified relative to base (text merge)
+  //   {1,2}   theirs deleted, we still have the file
+  //   {1,3}   we deleted, theirs still has it
+  //   {2,3}   both sides added (no common ancestor — e.g. file appeared
+  //           independently on both branches)
+  //   {2}     only ours exists (stray — treat like "keep ours")
+  //   {3}     only theirs exists (stray — treat like "keep theirs")
+  async conflictKind(filePath: string): Promise<
+    | "both-modified"
+    | "deleted-by-us"
+    | "deleted-by-them"
+    | "both-added"
+    | "ours-only"
+    | "theirs-only"
+    | "unknown"
+  > {
+    try {
+      const out = await this.git.raw(["ls-files", "-u", "--", filePath]);
+      const stages = new Set<number>();
+      for (const line of out.split(/\r?\n/)) {
+        // ls-files -u format: "<mode> <sha> <stage>\t<path>"
+        const m = line.match(/^\d+\s+[0-9a-f]+\s+(\d)\t/);
+        if (m) stages.add(Number(m[1]));
+      }
+      if (stages.has(1) && stages.has(2) && stages.has(3)) return "both-modified";
+      if (stages.has(1) && stages.has(2)) return "deleted-by-them";
+      if (stages.has(1) && stages.has(3)) return "deleted-by-us";
+      if (stages.has(2) && stages.has(3)) return "both-added";
+      if (stages.has(2)) return "ours-only";
+      if (stages.has(3)) return "theirs-only";
+      return "unknown";
+    } catch {
+      return "unknown";
+    }
+  }
+
+  // Resolve a conflict by picking one side verbatim. `checkout --ours` /
+  // `--theirs` writes that side's content to the worktree; `git add`
+  // then stages it (clears the unmerged flag from the index).
+  async resolveWithSide(filePath: string, side: "ours" | "theirs"): Promise<void> {
+    await this.git.raw(["checkout", `--${side}`, "--", filePath]);
+    await this.git.add(filePath);
+  }
+
+  // Resolve a delete/modify conflict by removing the file. `git rm` clears
+  // the index entry for all stages and removes the worktree file.
+  async resolveWithDelete(filePath: string): Promise<void> {
+    await this.git.raw(["rm", "--", filePath]);
+  }
+
   // Write a repo-relative file. Used by the merge editor to persist the
   // resolved result before calling markResolved.
   async writeFile(filePath: string, content: string): Promise<void> {

@@ -69,6 +69,18 @@ export function MergeEditor() {
   const [result, setResult] = useState<string>("");
   const [regions, setRegions] = useState<ConflictRegion[]>([]);
   const [loading, setLoading] = useState(false);
+  // For non-text-merge conflicts (delete/modify, both-added, …) we skip
+  // the three-pane editor and show a decision prompt instead. null means
+  // "either not loaded yet or this is a normal both-modified conflict".
+  type ConflictKind =
+    | "both-modified"
+    | "deleted-by-us"
+    | "deleted-by-them"
+    | "both-added"
+    | "ours-only"
+    | "theirs-only"
+    | "unknown";
+  const [conflictKind, setConflictKind] = useState<ConflictKind | null>(null);
 
   const oursEditorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
   const resultEditorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
@@ -114,9 +126,22 @@ export function MergeEditor() {
   useEffect(() => {
     if (!file) return;
     setLoading(true);
+    setConflictKind(null);
     historyRef.current = [];
     void (async () => {
       try {
+        // Detect conflict kind first — for anything other than a normal
+        // both-modified text merge we don't need to load the three
+        // stages (and stage :1 / :2 / :3 may not even exist).
+        const kindRes = await unwrap(window.gitApi.conflictKind(file));
+        setConflictKind(kindRes);
+        if (kindRes !== "both-modified") {
+          setOurs("");
+          setTheirs("");
+          setRegions([]);
+          setResult("");
+          return;
+        }
         const [o, b, t] = await Promise.all([
           unwrap(window.gitApi.fileAtRef(":2", file)),
           unwrap(window.gitApi.fileAtRef(":1", file)),
@@ -390,7 +415,17 @@ export function MergeEditor() {
   }
 
   function onClose() {
+    // Drop every right-panel selection so BranchGraph falls through to
+    // ChangesPanel (its default when nothing is selected). Landing the
+    // user straight on the changes list is the natural next step —
+    // they've resolved some files and now want to finish the commit.
+    const ui = useUI.getState();
     selectConflictFile(null);
+    ui.selectCommit(null);
+    ui.selectStash(null);
+    ui.selectCommitFile(null);
+    ui.selectWipFile(null);
+    ui.selectStashFile(null);
     setView("graph");
   }
 
@@ -450,6 +485,34 @@ export function MergeEditor() {
     [mapSideLine, onToggleLine],
   );
 
+  // For non-text-merge conflicts, resolve by picking a side or deleting
+  // the file outright. All three paths advance to the next conflict after
+  // a successful resolution so the user can blow through a pile of them.
+  async function resolveSpecial(
+    choice: "keep-ours" | "keep-theirs" | "delete",
+  ): Promise<void> {
+    if (!file) return;
+    try {
+      const currentIdx = conflicted.findIndex((f) => f.path === file);
+      const nextFile =
+        currentIdx >= 0 && currentIdx + 1 < conflicted.length
+          ? conflicted[currentIdx + 1].path
+          : null;
+      if (choice === "keep-ours") {
+        await unwrap(window.gitApi.resolveWithSide(file, "ours"));
+      } else if (choice === "keep-theirs") {
+        await unwrap(window.gitApi.resolveWithSide(file, "theirs"));
+      } else {
+        await unwrap(window.gitApi.resolveWithDelete(file));
+      }
+      toast("success", "Resolved");
+      await refreshAll();
+      if (nextFile) selectConflictFile(nextFile);
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : String(e));
+    }
+  }
+
   if (!file) {
     return (
       <div className="flex h-full flex-1 items-center justify-center text-sm text-neutral-500">
@@ -457,6 +520,9 @@ export function MergeEditor() {
       </div>
     );
   }
+
+  const needsPrompt =
+    conflictKind !== null && conflictKind !== "both-modified";
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -468,8 +534,17 @@ export function MergeEditor() {
         onNext={() => onNavigate("next")}
         onSave={saveAndMarkResolved}
         onClose={onClose}
-        canSave={!loading}
+        canSave={!loading && !needsPrompt}
       />
+      {needsPrompt ? (
+        <ConflictChoicePanel
+          kind={conflictKind!}
+          file={file}
+          oursBranch={oursBranch}
+          theirsBranch={theirsBranch}
+          onResolve={resolveSpecial}
+        />
+      ) : (
       <div
         className="grid min-h-0 flex-1 border-t border-neutral-800"
         style={{ gridTemplateColumns: "1fr 36px 1fr 36px 1fr" }}
@@ -568,6 +643,149 @@ export function MergeEditor() {
               recomputeAnchors();
             }}
           />
+        </div>
+      </div>
+      )}
+    </div>
+  );
+}
+
+// Prompt card for non-text-merge conflicts (delete/modify, both-added,
+// stray stages). Text merges want the three-pane editor; these cases
+// collapse to a small set of choices — take a side, or drop the file.
+function ConflictChoicePanel({
+  kind,
+  file,
+  oursBranch,
+  theirsBranch,
+  onResolve,
+}: {
+  kind:
+    | "deleted-by-us"
+    | "deleted-by-them"
+    | "both-added"
+    | "ours-only"
+    | "theirs-only"
+    | "unknown";
+  file: string;
+  oursBranch: string;
+  theirsBranch: string;
+  onResolve: (choice: "keep-ours" | "keep-theirs" | "delete") => void;
+}) {
+  type Action = {
+    choice: "keep-ours" | "keep-theirs" | "delete";
+    label: string;
+    hint: string;
+    danger?: boolean;
+  };
+  const actions: Action[] = (() => {
+    switch (kind) {
+      case "deleted-by-us":
+        return [
+          {
+            choice: "keep-theirs",
+            label: `Keep the version from ${theirsBranch}`,
+            hint: "Restore the file with the changes from the branch being merged in.",
+          },
+          {
+            choice: "delete",
+            label: "Keep the deletion",
+            hint: "Discard the incoming changes and leave the file deleted.",
+            danger: true,
+          },
+        ];
+      case "deleted-by-them":
+        return [
+          {
+            choice: "keep-ours",
+            label: `Keep our version (${oursBranch})`,
+            hint: "Restore the file and drop the deletion from the incoming branch.",
+          },
+          {
+            choice: "delete",
+            label: "Accept the deletion",
+            hint: "Remove the file as the incoming branch intended.",
+            danger: true,
+          },
+        ];
+      case "both-added":
+        return [
+          {
+            choice: "keep-ours",
+            label: `Take our version (${oursBranch})`,
+            hint: "Replace the file with the contents from our branch.",
+          },
+          {
+            choice: "keep-theirs",
+            label: `Take their version (${theirsBranch})`,
+            hint: "Replace the file with the contents from the branch being merged in.",
+          },
+        ];
+      case "ours-only":
+      case "theirs-only":
+      case "unknown":
+      default:
+        return [
+          {
+            choice: "keep-ours",
+            label: `Keep our version (${oursBranch})`,
+            hint: "Use the content from our branch and mark resolved.",
+          },
+          {
+            choice: "keep-theirs",
+            label: `Keep their version (${theirsBranch})`,
+            hint: "Use the content from the branch being merged in.",
+          },
+          {
+            choice: "delete",
+            label: "Remove the file",
+            hint: "Delete the file entirely as the resolution.",
+            danger: true,
+          },
+        ];
+    }
+  })();
+
+  const summary = (() => {
+    switch (kind) {
+      case "deleted-by-us":
+        return `This file was deleted on ${oursBranch} but modified on ${theirsBranch}.`;
+      case "deleted-by-them":
+        return `This file was modified on ${oursBranch} but deleted on ${theirsBranch}.`;
+      case "both-added":
+        return `Both ${oursBranch} and ${theirsBranch} added this file independently with different contents.`;
+      case "ours-only":
+        return `Only ${oursBranch} has this file in the conflict — the base and ${theirsBranch} sides are missing.`;
+      case "theirs-only":
+        return `Only ${theirsBranch} has this file in the conflict — the base and ${oursBranch} sides are missing.`;
+      case "unknown":
+      default:
+        return "This file is marked as conflicted but doesn't fit a standard three-way merge.";
+    }
+  })();
+
+  return (
+    <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto border-t border-neutral-800 p-6">
+      <div className="w-full max-w-xl rounded-lg border border-neutral-800 bg-neutral-925 p-5">
+        <h3 className="mb-1 text-sm font-medium text-neutral-100">
+          How should we resolve <span className="mono text-indigo-300">{file}</span>?
+        </h3>
+        <p className="mb-4 text-xs text-neutral-400">{summary}</p>
+        <div className="flex flex-col gap-2">
+          {actions.map((a) => (
+            <button
+              key={a.choice}
+              onClick={() => onResolve(a.choice)}
+              className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                a.danger
+                  ? "border-red-500/30 text-red-200 hover:bg-red-500/10"
+                  : "border-neutral-700 text-neutral-100 hover:border-indigo-500/40 hover:bg-indigo-500/10"
+              }`}
+            >
+              <div className="font-medium">{a.label}</div>
+              <div className="mt-0.5 text-xs text-neutral-400">{a.hint}</div>
+            </button>
+          ))}
         </div>
       </div>
     </div>

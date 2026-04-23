@@ -176,6 +176,17 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
       wrap(() => exec(repo).writeFile(p, content)),
   );
   ipc.handle(GIT.MERGE_MESSAGE, () => wrap(() => exec(repo).mergeMessage()));
+  ipc.handle(GIT.CONFLICT_KIND, (_e, p: string) =>
+    wrap(() => exec(repo).conflictKind(p)),
+  );
+  ipc.handle(
+    GIT.RESOLVE_SIDE,
+    (_e, { path: p, side }: { path: string; side: "ours" | "theirs" }) =>
+      wrap(() => exec(repo).resolveWithSide(p, side)),
+  );
+  ipc.handle(GIT.RESOLVE_DELETE, (_e, p: string) =>
+    wrap(() => exec(repo).resolveWithDelete(p)),
+  );
 
   ipc.handle(GIT.STASH_LIST, () => wrap(() => exec(repo).stashList()));
   ipc.handle(GIT.STASH_APPLY, (_e, index: number) => wrap(() => exec(repo).stashApply(index)));

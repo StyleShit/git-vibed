@@ -112,6 +112,20 @@ const gitApi = {
   writeFile: (filePath: string, content: string) =>
     invoke<void>(GIT.WRITE_FILE, { path: filePath, content }),
   mergeMessage: () => invoke<string>(GIT.MERGE_MESSAGE),
+  conflictKind: (filePath: string) =>
+    invoke<
+      | "both-modified"
+      | "deleted-by-us"
+      | "deleted-by-them"
+      | "both-added"
+      | "ours-only"
+      | "theirs-only"
+      | "unknown"
+    >(GIT.CONFLICT_KIND, filePath),
+  resolveWithSide: (filePath: string, side: "ours" | "theirs") =>
+    invoke<void>(GIT.RESOLVE_SIDE, { path: filePath, side }),
+  resolveWithDelete: (filePath: string) =>
+    invoke<void>(GIT.RESOLVE_DELETE, filePath),
 
   stashList: () => invoke<Stash[]>(GIT.STASH_LIST),
   stashApply: (index: number) => invoke<void>(GIT.STASH_APPLY, index),
