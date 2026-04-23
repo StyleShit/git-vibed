@@ -99,7 +99,7 @@ export function App() {
       } else {
         window.setTimeout(
           () => setBackgroundFetching(e.repoPath, false),
-          remaining,
+          remaining
         );
       }
       if (e.errors) {

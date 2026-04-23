@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Editor, { type Monaco } from "@monaco-editor/react";
+import Editor, { DiffEditor, type Monaco } from "@monaco-editor/react";
 import type * as monacoNs from "monaco-editor";
 import { useUI } from "../../stores/ui";
 import { useActive, useRepo } from "../../stores/repo";
@@ -66,6 +66,7 @@ export function MergeEditor() {
 
   const [ours, setOurs] = useState<string>("");
   const [theirs, setTheirs] = useState<string>("");
+  const [base, setBase] = useState<string>("");
   const [result, setResult] = useState<string>("");
   const [regions, setRegions] = useState<ConflictRegion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -130,28 +131,30 @@ export function MergeEditor() {
     historyRef.current = [];
     void (async () => {
       try {
-        // Detect conflict kind first — for anything other than a normal
-        // both-modified text merge we don't need to load the three
-        // stages (and stage :1 / :2 / :3 may not even exist).
+        // Detect the conflict kind first, then load whichever index
+        // stages are actually meaningful for it. For a normal text
+        // merge we need all three; for delete/modify and both-added
+        // only two are relevant but we still fetch all three in one
+        // shot — fileAtRef returns "" for missing stages which is
+        // fine for the choice-panel diff views.
         const kindRes = await unwrap(window.gitApi.conflictKind(file));
         setConflictKind(kindRes);
-        if (kindRes !== "both-modified") {
-          setOurs("");
-          setTheirs("");
-          setRegions([]);
-          setResult("");
-          return;
-        }
         const [o, b, t] = await Promise.all([
           unwrap(window.gitApi.fileAtRef(":2", file)),
           unwrap(window.gitApi.fileAtRef(":1", file)),
           unwrap(window.gitApi.fileAtRef(":3", file)),
         ]);
         setOurs(o);
+        setBase(b);
         setTheirs(t);
-        const r = threeWayMerge(o, b, t);
-        setRegions(r);
-        setResult(regionsToString(r));
+        if (kindRes === "both-modified") {
+          const r = threeWayMerge(o, b, t);
+          setRegions(r);
+          setResult(regionsToString(r));
+        } else {
+          setRegions([]);
+          setResult("");
+        }
       } catch (e) {
         toast("error", e instanceof Error ? e.message : String(e));
       } finally {
@@ -544,6 +547,10 @@ export function MergeEditor() {
           file={file}
           oursBranch={oursBranch}
           theirsBranch={theirsBranch}
+          ours={ours}
+          base={base}
+          theirs={theirs}
+          language={language}
           onResolve={resolveSpecial}
         />
       ) : (
@@ -655,11 +662,17 @@ export function MergeEditor() {
 // Prompt card for non-text-merge conflicts (delete/modify, both-added,
 // stray stages). Text merges want the three-pane editor; these cases
 // collapse to a small set of choices — take a side, or drop the file.
+// A side-by-side diff (or single-file view) is embedded so the user
+// can actually look at the content before deciding.
 function ConflictChoicePanel({
   kind,
   file,
   oursBranch,
   theirsBranch,
+  ours,
+  base,
+  theirs,
+  language,
   onResolve,
 }: {
   kind:
@@ -672,6 +685,10 @@ function ConflictChoicePanel({
   file: string;
   oursBranch: string;
   theirsBranch: string;
+  ours: string;
+  base: string;
+  theirs: string;
+  language: string;
   onResolve: (choice: "keep-ours" | "keep-theirs" | "delete") => void;
 }) {
   type Action = {
@@ -766,32 +783,141 @@ function ConflictChoicePanel({
     }
   })();
 
+  // What the user really needs to see depends on which stages exist:
+  //   deleted-by-us  → compare base vs theirs (what would come in)
+  //   deleted-by-them→ compare base vs ours   (what we'd be losing)
+  //   both-added     → compare ours vs theirs (the two rival adds)
+  //   ours-only      → show ours (single)
+  //   theirs-only    → show theirs (single)
+  const compare = (() => {
+    switch (kind) {
+      case "deleted-by-us":
+        return {
+          mode: "diff" as const,
+          originalLabel: `base — ${deriveFileLabel(file)} (before)`,
+          modifiedLabel: `${theirsBranch} (modified)`,
+          original: base,
+          modified: theirs,
+        };
+      case "deleted-by-them":
+        return {
+          mode: "diff" as const,
+          originalLabel: `base — ${deriveFileLabel(file)} (before)`,
+          modifiedLabel: `${oursBranch} (modified)`,
+          original: base,
+          modified: ours,
+        };
+      case "both-added":
+        return {
+          mode: "diff" as const,
+          originalLabel: `${oursBranch}`,
+          modifiedLabel: `${theirsBranch}`,
+          original: ours,
+          modified: theirs,
+        };
+      case "ours-only":
+        return { mode: "single" as const, label: oursBranch, content: ours };
+      case "theirs-only":
+        return { mode: "single" as const, label: theirsBranch, content: theirs };
+      case "unknown":
+      default:
+        // If anything was fetched, prefer an ours-vs-theirs comparison;
+        // otherwise just bail to a plain empty view rather than
+        // tripping Monaco with undefined content.
+        return ours || theirs
+          ? {
+              mode: "diff" as const,
+              originalLabel: `${oursBranch}`,
+              modifiedLabel: `${theirsBranch}`,
+              original: ours,
+              modified: theirs,
+            }
+          : { mode: "single" as const, label: "empty", content: "" };
+    }
+  })();
+
+  const previewOptions: monacoNs.editor.IStandaloneEditorConstructionOptions = {
+    readOnly: true,
+    minimap: { enabled: false },
+    fontSize: 12,
+    scrollBeyondLastLine: false,
+    renderWhitespace: "selection",
+    lineNumbersMinChars: 3,
+  };
+  const diffPreviewOptions: monacoNs.editor.IStandaloneDiffEditorConstructionOptions = {
+    ...previewOptions,
+    renderSideBySide: true,
+    originalEditable: false,
+  };
+
   return (
-    <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto border-t border-neutral-800 p-6">
-      <div className="w-full max-w-xl rounded-lg border border-neutral-800 bg-neutral-925 p-5">
-        <h3 className="mb-1 text-sm font-medium text-neutral-100">
+    <div className="flex min-h-0 flex-1 flex-col border-t border-neutral-800 bg-neutral-950">
+      <div className="shrink-0 border-b border-neutral-800 bg-neutral-925 px-4 py-3">
+        <h3 className="text-sm font-medium text-neutral-100">
           How should we resolve <span className="mono text-indigo-300">{file}</span>?
         </h3>
-        <p className="mb-4 text-xs text-neutral-400">{summary}</p>
-        <div className="flex flex-col gap-2">
-          {actions.map((a) => (
-            <button
-              key={a.choice}
-              onClick={() => onResolve(a.choice)}
-              className={`rounded-md border px-3 py-2 text-left text-sm transition ${
-                a.danger
-                  ? "border-red-500/30 text-red-200 hover:bg-red-500/10"
-                  : "border-neutral-700 text-neutral-100 hover:border-indigo-500/40 hover:bg-indigo-500/10"
-              }`}
-            >
-              <div className="font-medium">{a.label}</div>
-              <div className="mt-0.5 text-xs text-neutral-400">{a.hint}</div>
-            </button>
-          ))}
+        <p className="mt-0.5 text-xs text-neutral-400">{summary}</p>
+      </div>
+
+      {compare.mode === "diff" ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="grid shrink-0 border-b border-neutral-800 bg-neutral-925 text-[11px] uppercase tracking-wider text-neutral-500" style={{ gridTemplateColumns: "1fr 1fr" }}>
+            <div className="border-r border-neutral-800 px-3 py-1.5">{compare.originalLabel}</div>
+            <div className="px-3 py-1.5">{compare.modifiedLabel}</div>
+          </div>
+          <div className="min-h-0 flex-1">
+            <DiffEditor
+              height="100%"
+              language={language}
+              original={compare.original}
+              modified={compare.modified}
+              options={diffPreviewOptions}
+              theme={EDITOR_THEME}
+            />
+          </div>
         </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="shrink-0 border-b border-neutral-800 bg-neutral-925 px-3 py-1.5 text-[11px] uppercase tracking-wider text-neutral-500">
+            {compare.label}
+          </div>
+          <div className="min-h-0 flex-1">
+            <Editor
+              height="100%"
+              language={language}
+              value={compare.content}
+              options={previewOptions}
+              theme={EDITOR_THEME}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-neutral-800 bg-neutral-925 px-4 py-3">
+        {actions.map((a) => (
+          <button
+            key={a.choice}
+            onClick={() => onResolve(a.choice)}
+            title={a.hint}
+            className={`rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+              a.danger
+                ? "border-red-500/30 text-red-200 hover:bg-red-500/10"
+                : "border-neutral-700 text-neutral-100 hover:border-indigo-500/40 hover:bg-indigo-500/10"
+            }`}
+          >
+            {a.label}
+          </button>
+        ))}
       </div>
     </div>
   );
+}
+
+// Basename of a repo-relative path — used in the compare-pane labels so
+// they stay short even when the file lives deep in a tree.
+function deriveFileLabel(filePath: string): string {
+  const parts = filePath.split(/[\\/]/);
+  return parts[parts.length - 1] || filePath;
 }
 
 // Map a per-line decision to the CSS class used for its glyph-margin icon.
