@@ -5,6 +5,7 @@ import {
   gitLogOptions,
   gitStashesOptions,
   gitStatusOptions,
+  gitTagsOptions,
 } from "./gitApi";
 
 // Invalidate a list of query keys in one go. Helper because every
@@ -148,5 +149,37 @@ export function stashDropMutation(
       await unwrap(window.gitApi.stashDrop(index));
     },
     onSuccess: () => afterStashMutation(path),
+  };
+}
+
+// --- Tags ----------------------------------------------------------------
+
+interface TagCreateInput {
+  name: string;
+  ref: string;
+  message?: string;
+}
+
+export function tagCreateMutation(
+  path: string,
+): UseMutationOptions<void, Error, TagCreateInput> {
+  return {
+    mutationFn: async ({ name, ref, message }) => {
+      await unwrap(window.gitApi.tagCreate(name, ref, message));
+    },
+    onSuccess: () =>
+      invalidate([gitTagsOptions(path).queryKey, gitLogOptions(path).queryKey]),
+  };
+}
+
+export function tagDeleteMutation(
+  path: string,
+): UseMutationOptions<void, Error, string> {
+  return {
+    mutationFn: async (name) => {
+      await unwrap(window.gitApi.tagDelete(name));
+    },
+    onSuccess: () =>
+      invalidate([gitTagsOptions(path).queryKey, gitLogOptions(path).queryKey]),
   };
 }

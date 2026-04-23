@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useActiveTab, useRepo } from "../../stores/repo";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 import { gitTagsOptions } from "../../queries/gitApi";
+import { tagDeleteMutation } from "../../queries/mutations";
 import { TagIcon } from "../ui/Icons";
 import { useConfirm } from "../ui/Confirm";
 import type { Tag } from "@shared/types";
@@ -11,7 +11,7 @@ import type { Tag } from "@shared/types";
 export function TagList({ filter }: { filter: string }) {
   const activePath = useActiveTab()?.path;
   const tags = useQuery(gitTagsOptions(activePath)).data ?? [];
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const tagDeleteMut = useMutation(tagDeleteMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
@@ -34,9 +34,8 @@ export function TagList({ filter }: { filter: string }) {
     if (!ok) return;
     setBusy(t.name);
     try {
-      await unwrap(window.gitApi.tagDelete(t.name));
+      await tagDeleteMut.mutateAsync(t.name);
       toast("success", `Deleted ${t.name}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {

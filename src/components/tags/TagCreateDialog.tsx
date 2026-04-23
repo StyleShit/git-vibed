@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 import {
   gitBranchesOptions,
   gitStatusOptions,
 } from "../../queries/gitApi";
+import { tagCreateMutation } from "../../queries/mutations";
 
 // Create a lightweight or annotated tag at an arbitrary ref. Mirrors
 // `git tag [-a <name> -m <msg>] [<ref>]`. When a message is provided we
@@ -23,7 +23,7 @@ export function TagCreateDialog({
   const activePath = useActiveTab()?.path;
   const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
   const status = useQuery(gitStatusOptions(activePath)).data ?? null;
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const tagCreateMut = useMutation(tagCreateMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const [name, setName] = useState("");
   const [target, setTarget] = useState(initialRef ?? status?.branch ?? "HEAD");
@@ -35,9 +35,12 @@ export function TagCreateDialog({
     if (!n) return;
     setBusy(true);
     try {
-      await unwrap(window.gitApi.tagCreate(n, target, message.trim() || undefined));
+      await tagCreateMut.mutateAsync({
+        name: n,
+        ref: target,
+        message: message.trim() || undefined,
+      });
       toast("success", `Created tag ${n}`);
-      await refreshAll();
       onClose();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
