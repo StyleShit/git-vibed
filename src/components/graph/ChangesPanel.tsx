@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMenuPosition } from "../../hooks/useMenuPosition";
+import { Menu } from "@base-ui-components/react/menu";
 import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
@@ -312,75 +312,48 @@ function FileContextMenu({
   onStash: () => void;
   onDiscard: () => void;
 }) {
-  const { ref, pos } = useMenuPosition(x, y);
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [onClose, ref]);
-
+  const anchor = useMemo(
+    () => ({
+      getBoundingClientRect: () =>
+        DOMRect.fromRect({ x, y, width: 0, height: 0 }),
+    }),
+    [x, y],
+  );
   const n = paths.length;
   const plural = n === 1 ? "" : "s";
   const header = `${n} file${plural} selected`;
   return (
-    <>
-      <div className="fixed inset-0 z-20" onClick={onClose} />
-      <div
-        ref={ref}
-        className="fixed z-30 min-w-[220px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-sm shadow-xl"
-        style={pos}
-      >
-        <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
-          {header}
-        </div>
-        {section === "unstaged" && (
-          <MenuItem
-            onClick={() => {
-              onStage();
-              onClose();
-            }}
-          >
-            Stage
-          </MenuItem>
-        )}
-        {section === "staged" && (
-          <MenuItem
-            onClick={() => {
-              onUnstage();
-              onClose();
-            }}
-          >
-            Unstage
-          </MenuItem>
-        )}
-        <MenuItem
-          onClick={() => {
-            onStash();
-            onClose();
-          }}
+    <Menu.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      modal={false}
+    >
+      <Menu.Portal>
+        <Menu.Positioner
+          anchor={anchor}
+          side="bottom"
+          align="start"
+          sideOffset={0}
+          className="z-50 outline-none"
         >
-          Stash…
-        </MenuItem>
-        {section === "unstaged" && (
-          <MenuItem
-            onClick={() => {
-              onDiscard();
-              onClose();
-            }}
-            danger
-          >
-            Discard changes…
-          </MenuItem>
-        )}
-      </div>
-    </>
+          <Menu.Popup className="min-w-[220px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-sm shadow-xl outline-none">
+            <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
+              {header}
+            </div>
+            {section === "unstaged" && <MenuItem onClick={onStage}>Stage</MenuItem>}
+            {section === "staged" && <MenuItem onClick={onUnstage}>Unstage</MenuItem>}
+            <MenuItem onClick={onStash}>Stash…</MenuItem>
+            {section === "unstaged" && (
+              <MenuItem onClick={onDiscard} danger>
+                Discard changes…
+              </MenuItem>
+            )}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }
 
@@ -394,14 +367,14 @@ function MenuItem({
   danger?: boolean;
 }) {
   return (
-    <button
+    <Menu.Item
       onClick={onClick}
-      className={`block w-full px-3 py-1.5 text-left hover:bg-neutral-800 ${
+      className={`block w-full cursor-default px-3 py-1.5 text-left outline-none data-[highlighted]:bg-neutral-800 ${
         danger ? "text-red-400" : "text-neutral-200"
       }`}
     >
       {children}
-    </button>
+    </Menu.Item>
   );
 }
 

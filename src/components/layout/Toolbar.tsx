@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { Menu } from "@base-ui-components/react/menu";
 import { useRepo, useActiveTabShallow } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
@@ -45,16 +46,11 @@ export function Toolbar() {
   const [busy, setBusy] = useState<
     "pull" | "push" | "fetch" | "stash" | "pop" | "undo" | "redo" | null
   >(null);
-  const [pullMenuOpen, setPullMenuOpen] = useState(false);
-  const [pushMenuOpen, setPushMenuOpen] = useState(false);
-  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
-  const [repoMenuOpen, setRepoMenuOpen] = useState(false);
   const [showBranchCreate, setShowBranchCreate] = useState(false);
 
   const currentBranch = status?.branch ?? null;
 
   async function runPull(strategy: PullStrategy) {
-    setPullMenuOpen(false);
     if (!currentBranch) return;
     setBusy("pull");
     try {
@@ -69,7 +65,6 @@ export function Toolbar() {
   }
 
   async function runPush(force = false) {
-    setPushMenuOpen(false);
     if (!currentBranch) return;
     if (
       force &&
@@ -175,11 +170,9 @@ export function Toolbar() {
 
   return (
     <div className="flex h-11 shrink-0 items-center gap-1 border-b border-neutral-800 bg-neutral-925 px-2">
-      <RepoSelector open={repoMenuOpen} setOpen={setRepoMenuOpen} />
+      <RepoSelector />
       <div className="mx-1 h-6 w-px bg-neutral-800" />
       <BranchSelector
-        open={branchMenuOpen}
-        setOpen={setBranchMenuOpen}
         branches={branches}
         currentBranch={currentBranch}
         disabled={mergeActive}
@@ -235,9 +228,6 @@ export function Toolbar() {
         icon={<PullIcon className={`size-4 ${busy === "pull" ? "animate-pulse" : ""}`} />}
         disabled={!!busy || !currentBranch || mergeActive}
         onClick={() => runPull(defaultStrategy)}
-        onToggleMenu={() => setPullMenuOpen((v) => !v)}
-        menuOpen={pullMenuOpen}
-        onMenuClose={() => setPullMenuOpen(false)}
       >
         <MenuItem onClick={() => runPull("merge")}>
           Merge{defaultStrategy === "merge" ? " (default)" : ""}
@@ -256,9 +246,6 @@ export function Toolbar() {
         icon={<PushIcon className={`size-4 ${busy === "push" ? "animate-pulse" : ""}`} />}
         disabled={!!busy || !currentBranch || mergeActive}
         onClick={() => runPush(false)}
-        onToggleMenu={() => setPushMenuOpen((v) => !v)}
-        menuOpen={pushMenuOpen}
-        onMenuClose={() => setPushMenuOpen(false)}
       >
         <MenuItem onClick={() => runPush(false)}>Push</MenuItem>
         <MenuItem onClick={() => runPush(true)}>Force push (with lease)</MenuItem>
@@ -307,9 +294,8 @@ export function Toolbar() {
 }
 
 // Repo selector — the top-left "repository" pill. Clicking it opens a menu
-// with recent repos + an "open" button. For now we just expose the current
-// repo and let the TabBar do the rest.
-function RepoSelector({ open, setOpen }: { open: boolean; setOpen: (v: boolean) => void }) {
+// with recent repos + an "open" button.
+function RepoSelector() {
   const path = useActiveTabShallow((t) => t?.path ?? null);
   const openRepo = useRepo((s) => s.openRepo);
   const toast = useUI((s) => s.toast);
@@ -318,20 +304,17 @@ function RepoSelector({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
 
   const name = path ? path.split(/[\\/]/).pop() : "No repository";
 
-  useEffect(() => {
-    if (!open || loaded) return;
-    void (async () => {
-      try {
-        const res = await window.gitApi.recentRepos();
-        if (res.ok) setRecents(res.data);
-      } finally {
-        setLoaded(true);
-      }
-    })();
-  }, [open, loaded]);
+  async function loadRecents() {
+    if (loaded) return;
+    try {
+      const res = await window.gitApi.recentRepos();
+      if (res.ok) setRecents(res.data);
+    } finally {
+      setLoaded(true);
+    }
+  }
 
   async function openByPath(p: string) {
-    setOpen(false);
     try {
       await openRepo(p);
     } catch (e) {
@@ -340,7 +323,6 @@ function RepoSelector({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
   }
 
   async function browse() {
-    setOpen(false);
     try {
       const res = await window.gitApi.showOpenDialog();
       if (res.ok) await openRepo(res.data);
@@ -351,20 +333,26 @@ function RepoSelector({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
   }
 
   return (
-    <div className="relative w-[200px] shrink-0">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-sm text-neutral-200 hover:bg-neutral-800"
-        title={path ?? undefined}
+    <div className="w-[200px] shrink-0">
+      <Menu.Root
+        modal={false}
+        onOpenChange={(open) => {
+          if (open) void loadRecents();
+        }}
       >
-        <div className="flex min-w-0 flex-1 flex-col items-start leading-tight">
-          <span className="text-[9px] uppercase tracking-wider text-neutral-500">repository</span>
-          <span className="max-w-full truncate">{name}</span>
-        </div>
-        <ChevronDownIcon className="size-3 shrink-0 text-neutral-400" />
-      </button>
-      {open && (
-        <DropdownMenu onClose={() => setOpen(false)} align="left">
+        <Menu.Trigger
+          className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-sm text-neutral-200 hover:bg-neutral-800"
+          title={path ?? undefined}
+        >
+          <div className="flex min-w-0 flex-1 flex-col items-start leading-tight">
+            <span className="text-[9px] uppercase tracking-wider text-neutral-500">
+              repository
+            </span>
+            <span className="max-w-full truncate">{name}</span>
+          </div>
+          <ChevronDownIcon className="size-3 shrink-0 text-neutral-400" />
+        </Menu.Trigger>
+        <MenuDropdown>
           <MenuItem onClick={browse}>Open repository…</MenuItem>
           {recents.length > 0 && (
             <>
@@ -380,21 +368,17 @@ function RepoSelector({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
               ))}
             </>
           )}
-        </DropdownMenu>
-      )}
+        </MenuDropdown>
+      </Menu.Root>
     </div>
   );
 }
 
 function BranchSelector({
-  open,
-  setOpen,
   branches,
   currentBranch,
   disabled,
 }: {
-  open: boolean;
-  setOpen: (v: boolean) => void;
   branches: import("@shared/types").Branch[];
   currentBranch: string | null;
   disabled?: boolean;
@@ -410,7 +394,6 @@ function BranchSelector({
     .slice(0, 20);
 
   async function checkout(name: string) {
-    setOpen(false);
     try {
       await unwrap(window.gitApi.checkout(name));
       toast("success", `Switched to ${name}`);
@@ -421,29 +404,40 @@ function BranchSelector({
   }
 
   return (
-    <div className="relative w-[200px] shrink-0">
-      <button
-        onClick={() => setOpen(!open)}
-        disabled={!currentBranch || disabled}
-        className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-sm text-neutral-200 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-        title={currentBranch ?? "detached"}
+    <div className="w-[200px] shrink-0">
+      <Menu.Root
+        modal={false}
+        onOpenChange={(open) => {
+          if (!open) setFilter("");
+        }}
       >
-        <div className="flex min-w-0 flex-1 flex-col items-start leading-tight">
-          <span className="text-[9px] uppercase tracking-wider text-neutral-500">branch</span>
-          <span className="flex min-w-0 max-w-full items-center gap-1">
-            <BranchIcon className="size-3 shrink-0 text-neutral-400" />
-            <span className="min-w-0 flex-1 truncate">{currentBranch ?? "detached"}</span>
-          </span>
-        </div>
-        <ChevronDownIcon className="size-3 shrink-0 text-neutral-400" />
-      </button>
-      {open && (
-        <DropdownMenu onClose={() => setOpen(false)} align="left" wide>
+        <Menu.Trigger
+          disabled={!currentBranch || disabled}
+          className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-sm text-neutral-200 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+          title={currentBranch ?? "detached"}
+        >
+          <div className="flex min-w-0 flex-1 flex-col items-start leading-tight">
+            <span className="text-[9px] uppercase tracking-wider text-neutral-500">branch</span>
+            <span className="flex min-w-0 max-w-full items-center gap-1">
+              <BranchIcon className="size-3 shrink-0 text-neutral-400" />
+              <span className="min-w-0 flex-1 truncate">{currentBranch ?? "detached"}</span>
+            </span>
+          </div>
+          <ChevronDownIcon className="size-3 shrink-0 text-neutral-400" />
+        </Menu.Trigger>
+        <MenuDropdown wide>
           <div className="px-2 pb-1">
             <input
               autoFocus
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
+              onKeyDown={(e) => {
+                // Prevent Menu's arrow/letter-based roving focus from
+                // swallowing input keystrokes.
+                if (e.key !== "Escape" && e.key !== "Enter") {
+                  e.stopPropagation();
+                }
+              }}
               placeholder="Filter branches…"
               className="w-full rounded bg-neutral-800 px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-indigo-500"
             />
@@ -466,8 +460,8 @@ function BranchSelector({
               ) : null}
             </MenuItem>
           ))}
-        </DropdownMenu>
-      )}
+        </MenuDropdown>
+      </Menu.Root>
     </div>
   );
 }
@@ -535,9 +529,6 @@ function SplitButton({
   icon,
   hint,
   onClick,
-  onToggleMenu,
-  menuOpen,
-  onMenuClose,
   disabled,
   children,
 }: {
@@ -546,9 +537,6 @@ function SplitButton({
   icon: React.ReactNode;
   hint?: string;
   onClick: () => void;
-  onToggleMenu: () => void;
-  menuOpen: boolean;
-  onMenuClose: () => void;
   disabled?: boolean;
   children: React.ReactNode;
 }) {
@@ -558,7 +546,7 @@ function SplitButton({
   // `hover:bg-*` and the gap between them (and their rounded-l/rounded-r
   // edges) produced a visible seam that looked like a rendering bug.
   return (
-    <div className="group/split relative flex items-stretch rounded hover:bg-neutral-800">
+    <div className="group/split flex items-stretch rounded hover:bg-neutral-800">
       <button
         onClick={onClick}
         disabled={disabled}
@@ -575,48 +563,43 @@ function SplitButton({
         </div>
         <span>{label}</span>
       </button>
-      <button
-        onClick={onToggleMenu}
-        disabled={disabled}
-        className="flex items-center rounded-r px-1 py-1 text-neutral-400 group-hover/split:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <ChevronDownIcon className="size-3" />
-      </button>
-      {menuOpen && (
-        <DropdownMenu onClose={onMenuClose} align="left" offsetTop>
-          {children}
-        </DropdownMenu>
-      )}
+      <Menu.Root modal={false}>
+        <Menu.Trigger
+          disabled={disabled}
+          className="flex items-center rounded-r px-1 py-1 text-neutral-400 group-hover/split:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronDownIcon className="size-3" />
+        </Menu.Trigger>
+        <MenuDropdown>{children}</MenuDropdown>
+      </Menu.Root>
     </div>
   );
 }
 
-function DropdownMenu({
+function MenuDropdown({
   children,
-  onClose,
-  align = "left",
   wide,
-  offsetTop,
 }: {
   children: React.ReactNode;
-  onClose: () => void;
-  align?: "left" | "right";
   wide?: boolean;
-  offsetTop?: boolean;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
   return (
-    <>
-      <div className="fixed inset-0 z-10" onClick={onClose} />
-      <div
-        ref={ref}
-        className={`absolute z-20 ${offsetTop ? "top-full mt-1" : "top-full mt-1"} ${
-          align === "left" ? "left-0" : "right-0"
-        } ${wide ? "min-w-[260px]" : "min-w-[180px]"} rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-lg`}
+    <Menu.Portal>
+      <Menu.Positioner
+        side="bottom"
+        align="start"
+        sideOffset={4}
+        className="z-50 outline-none"
       >
-        {children}
-      </div>
-    </>
+        <Menu.Popup
+          className={`${
+            wide ? "min-w-[260px]" : "min-w-[180px]"
+          } rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-lg outline-none`}
+        >
+          {children}
+        </Menu.Popup>
+      </Menu.Positioner>
+    </Menu.Portal>
   );
 }
 
@@ -628,12 +611,12 @@ function MenuItem({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Menu.Item
       onClick={onClick}
-      className="flex w-full items-center whitespace-nowrap px-3 py-1.5 text-left text-sm hover:bg-neutral-800"
+      className="flex w-full cursor-default items-center whitespace-nowrap px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-neutral-800"
     >
       {children}
-    </button>
+    </Menu.Item>
   );
 }
 

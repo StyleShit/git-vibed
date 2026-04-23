@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { Menu } from "@base-ui-components/react/menu";
 import type { Branch } from "@shared/types";
 import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
@@ -6,7 +7,6 @@ import { unwrap } from "../../lib/ipc";
 import { buildCreatePrUrl } from "../../lib/pr-url";
 import { Prompt } from "../ui/Prompt";
 import { useConfirm } from "../ui/Confirm";
-import { useMenuPosition } from "../../hooks/useMenuPosition";
 
 interface Props {
   x: number;
@@ -31,7 +31,6 @@ export function BranchContextMenu({
   onOpenPR,
   onCreateBranch,
 }: Props) {
-  const { ref, pos } = useMenuPosition(x, y);
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
   const ghAvailable = useActive("ghAvailable") ?? false;
@@ -49,18 +48,13 @@ export function BranchContextMenu({
   const [busy, setBusy] = useState(false);
   const [upstreamPrompt, setUpstreamPrompt] = useState(false);
 
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("mousedown", onDown);
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [onClose]);
+  const anchor = useMemo(
+    () => ({
+      getBoundingClientRect: () =>
+        DOMRect.fromRect({ x, y, width: 0, height: 0 }),
+    }),
+    [x, y],
+  );
 
   async function run<T>(label: string, fn: () => Promise<T>, successMsg?: string) {
     if (busy) return;
@@ -73,7 +67,6 @@ export function BranchContextMenu({
       toast("error", `${label}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
-      onClose();
     }
   }
 
@@ -95,7 +88,6 @@ export function BranchContextMenu({
         danger: true,
       }))
     ) {
-      onClose();
       return;
     }
     await run(
@@ -111,26 +103,17 @@ export function BranchContextMenu({
     const origin = remotes.find((r) => r.name === "origin") ?? remotes[0];
     if (!origin) {
       toast("error", "No remote configured");
-      onClose();
       return;
     }
-    // Default the base to the repo's main-ish branch — we don't have gh repo
-    // info here so fall back to common names.
     const base = "main";
     const url = buildCreatePrUrl(origin.fetchUrl, base, branch.name);
     if (!url) {
       toast("error", "Unsupported git host for PR fallback");
-      onClose();
       return;
     }
     await window.gitApi.openExternal(url);
-    onClose();
   }
 
-  // Always force-delete — previously we tried a safe delete first and only
-  // offered force on failure, but that led to confirm-twice flows for
-  // unmerged branches. The confirmation step below is the single gate;
-  // `-D` is used unconditionally underneath.
   async function setUpstream(value: string) {
     setUpstreamPrompt(false);
     const target = value.trim();
@@ -156,11 +139,9 @@ export function BranchContextMenu({
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
-    onClose();
   }
 
   async function resetCurrentTo(mode: "soft" | "mixed" | "hard") {
-    onClose();
     const ok = await confirmDialog({
       title: `Reset to ${branch.name}`,
       message:
@@ -183,13 +164,13 @@ export function BranchContextMenu({
   function copyName() {
     void navigator.clipboard.writeText(branch.name);
     toast("success", "Copied branch name");
-    onClose();
   }
 
+  // Always force-delete — previously we tried a safe delete first and only
+  // offered force on failure, but that led to confirm-twice flows for
+  // unmerged branches. The confirmation step below is the single gate;
+  // `-D` is used unconditionally underneath.
   async function del() {
-    // Close the context menu first so it's not still floating behind the
-    // confirm dialog and left open after the operation completes.
-    onClose();
     const ok = await confirmDialog({
       title: `Delete ${branch.name}?`,
       message: `Force delete branch ${branch.name}?\nThis can discard unmerged commits.`,
@@ -211,98 +192,83 @@ export function BranchContextMenu({
 
   return (
     <>
-      <div className="fixed inset-0 z-20" onClick={onClose} />
-      <div
-        ref={ref}
-        className="fixed z-30 min-w-[200px] rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-xl"
-        style={pos}
+      <Menu.Root
+        open={!upstreamPrompt}
+        onOpenChange={(open) => {
+          if (!open && !upstreamPrompt) onClose();
+        }}
+        modal={false}
       >
-        {!branch.isHead && <Item onClick={checkout}>Checkout</Item>}
-        <Item onClick={copyName}>Copy name</Item>
-        {branch.isLocal && (
-          <Item
-            onClick={() => {
-              onRename(branch);
-              onClose();
-            }}
+        <Menu.Portal>
+          <Menu.Positioner
+            anchor={anchor}
+            side="bottom"
+            align="start"
+            sideOffset={0}
+            className="z-50 outline-none"
           >
-            Rename…
-          </Item>
-        )}
-        <Item
-          onClick={() => {
-            onCreateBranch(branch.name);
-            onClose();
-          }}
-        >
-          Create branch from here…
-        </Item>
-        {(canPull || canPush) && <Divider />}
-        {canPull && <Item onClick={pull}>Pull</Item>}
-        {canPush && <Item onClick={() => push(false)}>Push</Item>}
-        {canPush && <Item onClick={() => push(true)}>Force push (with lease)</Item>}
-        {branch.isLocal && (
-          <Item onClick={() => setUpstreamPrompt(true)}>Set upstream…</Item>
-        )}
-        {branch.isLocal && branch.tracking && (
-          <Item onClick={clearUpstream}>Unset upstream</Item>
-        )}
-        <Divider />
-        {existingPR ? (
-          <Item
-            onClick={() => {
-              void window.gitApi.openExternal(existingPR.url);
-              onClose();
-            }}
-          >
-            View PR #{existingPR.number} in browser
-          </Item>
-        ) : (
-          <Item
-            onClick={() => {
-              if (ghAvailable) {
-                onOpenPR(branch);
-                onClose();
-              } else {
-                void openPRInBrowser();
-              }
-            }}
-          >
-            Open Pull Request…
-          </Item>
-        )}
-        <Divider />
-        <Item
-          onClick={() => {
-            onMerge(branch.name);
-            onClose();
-          }}
-        >
-          Merge into current…
-        </Item>
-        <Item
-          onClick={() => {
-            onRebase(branch.name);
-            onClose();
-          }}
-        >
-          Rebase current onto…
-        </Item>
-        <Divider />
-        <Item onClick={() => resetCurrentTo("soft")}>Reset current to this (soft)</Item>
-        <Item onClick={() => resetCurrentTo("mixed")}>Reset current to this (mixed)</Item>
-        <Item onClick={() => resetCurrentTo("hard")} danger>
-          Reset current to this (hard)…
-        </Item>
-        {branch.isLocal && (
-          <>
-            <Divider />
-            <Item onClick={() => del()} danger>
-              Delete…
-            </Item>
-          </>
-        )}
-      </div>
+            <Menu.Popup className="min-w-[200px] rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-xl outline-none">
+              {!branch.isHead && <Item onClick={checkout}>Checkout</Item>}
+              <Item onClick={copyName}>Copy name</Item>
+              {branch.isLocal && <Item onClick={() => onRename(branch)}>Rename…</Item>}
+              <Item onClick={() => onCreateBranch(branch.name)}>
+                Create branch from here…
+              </Item>
+              {(canPull || canPush) && <Divider />}
+              {canPull && <Item onClick={pull}>Pull</Item>}
+              {canPush && <Item onClick={() => push(false)}>Push</Item>}
+              {canPush && <Item onClick={() => push(true)}>Force push (with lease)</Item>}
+              {branch.isLocal && (
+                <Item onClick={() => setUpstreamPrompt(true)} closeOnClick={false}>
+                  Set upstream…
+                </Item>
+              )}
+              {branch.isLocal && branch.tracking && (
+                <Item onClick={clearUpstream}>Unset upstream</Item>
+              )}
+              <Divider />
+              {existingPR ? (
+                <Item onClick={() => void window.gitApi.openExternal(existingPR.url)}>
+                  View PR #{existingPR.number} in browser
+                </Item>
+              ) : (
+                <Item
+                  onClick={() => {
+                    if (ghAvailable) {
+                      onOpenPR(branch);
+                    } else {
+                      void openPRInBrowser();
+                    }
+                  }}
+                >
+                  Open Pull Request…
+                </Item>
+              )}
+              <Divider />
+              <Item onClick={() => onMerge(branch.name)}>Merge into current…</Item>
+              <Item onClick={() => onRebase(branch.name)}>Rebase current onto…</Item>
+              <Divider />
+              <Item onClick={() => resetCurrentTo("soft")}>
+                Reset current to this (soft)
+              </Item>
+              <Item onClick={() => resetCurrentTo("mixed")}>
+                Reset current to this (mixed)
+              </Item>
+              <Item onClick={() => resetCurrentTo("hard")} danger>
+                Reset current to this (hard)…
+              </Item>
+              {branch.isLocal && (
+                <>
+                  <Divider />
+                  <Item onClick={del} danger>
+                    Delete…
+                  </Item>
+                </>
+              )}
+            </Menu.Popup>
+          </Menu.Positioner>
+        </Menu.Portal>
+      </Menu.Root>
       {upstreamPrompt && (
         <Prompt
           title={`Set upstream for ${branch.name}`}
@@ -325,20 +291,23 @@ function Item({
   children,
   onClick,
   danger,
+  closeOnClick,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   danger?: boolean;
+  closeOnClick?: boolean;
 }) {
   return (
-    <button
+    <Menu.Item
       onClick={onClick}
-      className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-neutral-800 ${
+      closeOnClick={closeOnClick}
+      className={`block w-full cursor-default px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-neutral-800 ${
         danger ? "text-red-400" : "text-neutral-200"
       }`}
     >
       {children}
-    </button>
+    </Menu.Item>
   );
 }
 

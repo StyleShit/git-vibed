@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { Menu } from "@base-ui-components/react/menu";
 import type { Commit } from "@shared/types";
 import { useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { useConfirm } from "../ui/Confirm";
 import { TagCreateDialog } from "../tags/TagCreateDialog";
-import { useMenuPosition } from "../../hooks/useMenuPosition";
 
 export function CommitContextMenu({
   x,
@@ -18,19 +18,18 @@ export function CommitContextMenu({
   commit: Commit;
   onClose: () => void;
 }) {
-  const { ref, pos } = useMenuPosition(x, y);
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
   const confirmDialog = useConfirm();
   const [showTag, setShowTag] = useState(false);
 
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [onClose]);
+  const anchor = useMemo(
+    () => ({
+      getBoundingClientRect: () =>
+        DOMRect.fromRect({ x, y, width: 0, height: 0 }),
+    }),
+    [x, y],
+  );
 
   async function cherryPick() {
     try {
@@ -40,7 +39,6 @@ export function CommitContextMenu({
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
-    onClose();
   }
 
   async function revert() {
@@ -57,7 +55,6 @@ export function CommitContextMenu({
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
-    onClose();
   }
 
   async function reset(mode: "soft" | "mixed" | "hard") {
@@ -78,7 +75,6 @@ export function CommitContextMenu({
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
-    onClose();
   }
 
   async function checkout() {
@@ -89,33 +85,43 @@ export function CommitContextMenu({
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
-    onClose();
-  }
-
-  function openTagDialog() {
-    setShowTag(true);
   }
 
   return (
     <>
-      <div className="fixed inset-0 z-20" onClick={onClose} />
-      <div
-        ref={ref}
-        className="fixed z-30 min-w-[180px] rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-xl"
-        style={pos}
+      <Menu.Root
+        open={!showTag}
+        onOpenChange={(open) => {
+          if (!open && !showTag) onClose();
+        }}
+        modal={false}
       >
-        <Item onClick={checkout}>Checkout this commit</Item>
-        <Item onClick={cherryPick}>Cherry-pick</Item>
-        <Item onClick={revert}>Revert</Item>
-        <div className="my-1 border-t border-neutral-800" />
-        <Item onClick={openTagDialog}>Create tag here…</Item>
-        <div className="my-1 border-t border-neutral-800" />
-        <Item onClick={() => reset("soft")}>Reset (soft)</Item>
-        <Item onClick={() => reset("mixed")}>Reset (mixed)</Item>
-        <Item onClick={() => reset("hard")} danger>
-          Reset (hard)
-        </Item>
-      </div>
+        <Menu.Portal>
+          <Menu.Positioner
+            anchor={anchor}
+            side="bottom"
+            align="start"
+            sideOffset={0}
+            className="z-50 outline-none"
+          >
+            <Menu.Popup className="min-w-[180px] rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-xl outline-none">
+              <Item onClick={checkout}>Checkout this commit</Item>
+              <Item onClick={cherryPick}>Cherry-pick</Item>
+              <Item onClick={revert}>Revert</Item>
+              <Divider />
+              <Item onClick={() => setShowTag(true)} closeOnClick={false}>
+                Create tag here…
+              </Item>
+              <Divider />
+              <Item onClick={() => reset("soft")}>Reset (soft)</Item>
+              <Item onClick={() => reset("mixed")}>Reset (mixed)</Item>
+              <Item onClick={() => reset("hard")} danger>
+                Reset (hard)
+              </Item>
+            </Menu.Popup>
+          </Menu.Positioner>
+        </Menu.Portal>
+      </Menu.Root>
       {showTag && (
         <TagCreateDialog
           initialRef={commit.hash}
@@ -133,19 +139,26 @@ function Item({
   children,
   onClick,
   danger,
+  closeOnClick,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   danger?: boolean;
+  closeOnClick?: boolean;
 }) {
   return (
-    <button
+    <Menu.Item
       onClick={onClick}
-      className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-neutral-800 ${
+      closeOnClick={closeOnClick}
+      className={`block w-full cursor-default px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-neutral-800 ${
         danger ? "text-red-400" : "text-neutral-200"
       }`}
     >
       {children}
-    </button>
+    </Menu.Item>
   );
+}
+
+function Divider() {
+  return <div className="my-1 border-t border-neutral-800" />;
 }

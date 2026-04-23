@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useMenuPosition } from "../../hooks/useMenuPosition";
+import { Menu } from "@base-ui-components/react/menu";
 import { createPortal } from "react-dom";
 import { useActive, useRepo } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
@@ -1065,47 +1065,51 @@ function TagOrStashMenu({
   onCheckout: () => void;
   onCopy: () => void;
 }) {
-  const { ref, pos } = useMenuPosition(x, y);
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [onClose, ref]);
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-50" onClick={onClose} />
-      <div
-        ref={ref}
-        className="gui-menu-in fixed z-50 min-w-[180px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-sm shadow-xl"
-        style={pos}
-      >
-        <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
-          {refName}
-        </div>
-        {kind !== "stash" && (
-          <button
-            onClick={onCheckout}
-            className="block w-full px-3 py-1.5 text-left text-neutral-200 hover:bg-neutral-800"
-          >
-            Checkout
-          </button>
-        )}
-        <button
-          onClick={onCopy}
-          className="block w-full px-3 py-1.5 text-left text-neutral-200 hover:bg-neutral-800"
+  const anchor = useMemo(
+    () => ({
+      getBoundingClientRect: () =>
+        DOMRect.fromRect({ x, y, width: 0, height: 0 }),
+    }),
+    [x, y],
+  );
+  return (
+    <Menu.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      modal={false}
+    >
+      <Menu.Portal>
+        <Menu.Positioner
+          anchor={anchor}
+          side="bottom"
+          align="start"
+          sideOffset={0}
+          className="z-50 outline-none"
         >
-          Copy name
-        </button>
-      </div>
-    </>,
-    document.body,
+          <Menu.Popup className="gui-menu-in min-w-[180px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-sm shadow-xl outline-none">
+            <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
+              {refName}
+            </div>
+            {kind !== "stash" && (
+              <Menu.Item
+                onClick={onCheckout}
+                className="block w-full cursor-default px-3 py-1.5 text-left text-neutral-200 outline-none data-[highlighted]:bg-neutral-800"
+              >
+                Checkout
+              </Menu.Item>
+            )}
+            <Menu.Item
+              onClick={onCopy}
+              className="block w-full cursor-default px-3 py-1.5 text-left text-neutral-200 outline-none data-[highlighted]:bg-neutral-800"
+            >
+              Copy name
+            </Menu.Item>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }
 

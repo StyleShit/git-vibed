@@ -1,10 +1,10 @@
-import { useEffect } from "react";
+import { useMemo } from "react";
+import { Menu } from "@base-ui-components/react/menu";
 import type { Commit } from "@shared/types";
 import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
 import { useConfirm } from "../ui/Confirm";
-import { useMenuPosition } from "../../hooks/useMenuPosition";
 
 // Context menu shown when the user right-clicks a commit that also
 // happens to be a stash entry (carries a `stash`/`refs/stash`
@@ -23,35 +23,28 @@ export function StashContextMenu({
   commit: Commit;
   onClose: () => void;
 }) {
-  const { ref, pos } = useMenuPosition(x, y);
   const toast = useUI((s) => s.toast);
   const refreshAll = useRepo((s) => s.refreshAll);
   const stashes = useActive("stashes") ?? [];
   const confirmDialog = useConfirm();
 
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [onClose]);
+  const anchor = useMemo(
+    () => ({
+      getBoundingClientRect: () =>
+        DOMRect.fromRect({ x, y, width: 0, height: 0 }),
+    }),
+    [x, y],
+  );
 
-  // Map the clicked commit back to its stash entry by hash. `refs/stash`
-  // only decorates stash@{0}, so the graph decoration alone isn't
-  // enough when the user has several stashes stacked — matching on the
-  // commit SHA resolves the right index regardless of depth.
+  // `refs/stash` only decorates stash@{0}, so the graph decoration alone
+  // isn't enough when the user has several stashes stacked — matching on
+  // the commit SHA resolves the right index regardless of depth.
   const stashEntry =
     stashes.find((s) => s.hash === commit.hash) ??
     stashes.find((s) => s.index === 0) ??
     null;
 
-  async function run(label: string, fn: () => Promise<unknown>, closeMenu = true) {
+  async function run(label: string, fn: () => Promise<unknown>) {
     try {
       await fn();
       toast("success", label);
@@ -59,13 +52,11 @@ export function StashContextMenu({
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
-    if (closeMenu) onClose();
   }
 
   async function apply() {
     if (!stashEntry) {
       toast("error", "No matching stash entry");
-      onClose();
       return;
     }
     await run("Applied stash", () =>
@@ -76,7 +67,6 @@ export function StashContextMenu({
   async function pop() {
     if (!stashEntry) {
       toast("error", "No matching stash entry");
-      onClose();
       return;
     }
     if (stashEntry.index === 0) {
@@ -92,10 +82,8 @@ export function StashContextMenu({
   async function drop() {
     if (!stashEntry) {
       toast("error", "No matching stash entry");
-      onClose();
       return;
     }
-    onClose();
     const ok = await confirmDialog({
       title: "Drop stash",
       message: `Drop ${stashEntry.ref}?\nThis can't be undone.`,
@@ -103,39 +91,47 @@ export function StashContextMenu({
       danger: true,
     });
     if (!ok) return;
-    await run(
-      "Dropped stash",
-      () => unwrap(window.gitApi.stashDrop(stashEntry.index)),
-      false,
+    await run("Dropped stash", () =>
+      unwrap(window.gitApi.stashDrop(stashEntry.index)),
     );
   }
 
   function copyHash() {
     void navigator.clipboard.writeText(commit.hash);
     toast("success", "Copied hash");
-    onClose();
   }
 
   return (
-    <>
-      <div className="fixed inset-0 z-20" onClick={onClose} />
-      <div
-        ref={ref}
-        className="fixed z-30 min-w-[200px] rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-xl"
-        style={pos}
-      >
-        <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
-          stash · {commit.hash.slice(0, 7)}
-        </div>
-        <Item onClick={apply}>Apply</Item>
-        <Item onClick={pop}>Pop</Item>
-        <Item onClick={drop} danger>
-          Drop…
-        </Item>
-        <div className="my-1 border-t border-neutral-800" />
-        <Item onClick={copyHash}>Copy hash</Item>
-      </div>
-    </>
+    <Menu.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      modal={false}
+    >
+      <Menu.Portal>
+        <Menu.Positioner
+          anchor={anchor}
+          side="bottom"
+          align="start"
+          sideOffset={0}
+          className="z-50 outline-none"
+        >
+          <Menu.Popup className="min-w-[200px] rounded-md border border-neutral-800 bg-neutral-900 py-1 shadow-xl outline-none">
+            <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
+              stash · {commit.hash.slice(0, 7)}
+            </div>
+            <Item onClick={apply}>Apply</Item>
+            <Item onClick={pop}>Pop</Item>
+            <Item onClick={drop} danger>
+              Drop…
+            </Item>
+            <Divider />
+            <Item onClick={copyHash}>Copy hash</Item>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }
 
@@ -149,13 +145,17 @@ function Item({
   danger?: boolean;
 }) {
   return (
-    <button
+    <Menu.Item
       onClick={onClick}
-      className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-neutral-800 ${
+      className={`block w-full cursor-default px-3 py-1.5 text-left text-sm outline-none data-[highlighted]:bg-neutral-800 ${
         danger ? "text-red-400" : "text-neutral-200"
       }`}
     >
       {children}
-    </button>
+    </Menu.Item>
   );
+}
+
+function Divider() {
+  return <div className="my-1 border-t border-neutral-800" />;
 }

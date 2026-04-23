@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { Dialog as BaseDialog } from "@base-ui-components/react/dialog";
 
 export function Dialog({
   title,
@@ -11,34 +11,28 @@ export function Dialog({
   onClose: () => void;
   width?: number;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onEsc);
-    return () => document.removeEventListener("keydown", onEsc);
-  }, [onClose]);
-
   return (
-    <div
-      className="gui-backdrop-in fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+    <BaseDialog.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
       }}
     >
-      <div
-        ref={ref}
-        style={{ width }}
-        className="gui-modal-in rounded-lg border border-neutral-800 bg-neutral-900 p-4 shadow-2xl"
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">{title}</h2>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-100">
-            ×
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
+      <BaseDialog.Portal>
+        <BaseDialog.Backdrop className="gui-backdrop-in fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" />
+        <BaseDialog.Popup
+          style={{ width }}
+          className="gui-modal-in fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-neutral-800 bg-neutral-900 p-4 shadow-2xl"
+        >
+          <div className="mb-3 flex items-center justify-between">
+            <BaseDialog.Title className="text-sm font-semibold">{title}</BaseDialog.Title>
+            <BaseDialog.Close className="text-neutral-400 hover:text-neutral-100">
+              ×
+            </BaseDialog.Close>
+          </div>
+          {children}
+        </BaseDialog.Popup>
+      </BaseDialog.Portal>
+    </BaseDialog.Root>
   );
 }

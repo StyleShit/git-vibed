@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { Dialog } from "./Dialog";
 
-// Replacement for window.prompt() — Electron's renderer doesn't implement
-// it, so we render a small modal with an input instead. Submits on Enter.
 export function Prompt({
   title,
   label,

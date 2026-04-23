@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { useMenuPosition } from "../../hooks/useMenuPosition";
+import { Menu } from "@base-ui-components/react/menu";
 import { useRepo, useActive } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
@@ -616,62 +616,67 @@ function FolderContextMenu({
   onSetRemoteUrl: () => void;
   onFetchRemote: () => void;
 }) {
-  const { ref, pos } = useMenuPosition(x, y);
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [onClose, ref]);
+  const anchor = useMemo(
+    () => ({
+      getBoundingClientRect: () =>
+        DOMRect.fromRect({ x, y, width: 0, height: 0 }),
+    }),
+    [x, y],
+  );
   return (
-    <>
-      <div className="fixed inset-0 z-20" onClick={onClose} />
-      <div
-        ref={ref}
-        className="fixed z-30 min-w-[220px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-sm shadow-xl"
-        style={pos}
-      >
-        <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
-          {path}/ ({count})
-        </div>
-        {isRemoteRoot ? (
-          <>
-            <button
-              onClick={onFetchRemote}
-              className="block w-full px-3 py-1.5 text-left text-neutral-200 hover:bg-neutral-800"
-            >
-              Fetch
-            </button>
-            <button
-              onClick={onSetRemoteUrl}
-              className="block w-full px-3 py-1.5 text-left text-neutral-200 hover:bg-neutral-800"
-            >
-              Set URLs…
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              onClick={onPullAll}
-              className="block w-full px-3 py-1.5 text-left text-neutral-200 hover:bg-neutral-800"
-            >
-              Pull all
-            </button>
-            <button
-              onClick={onDeleteAll}
-              className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-neutral-800"
-            >
-              Delete all…
-            </button>
-          </>
-        )}
-      </div>
-    </>
+    <Menu.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      modal={false}
+    >
+      <Menu.Portal>
+        <Menu.Positioner
+          anchor={anchor}
+          side="bottom"
+          align="start"
+          sideOffset={0}
+          className="z-50 outline-none"
+        >
+          <Menu.Popup className="min-w-[220px] rounded-md border border-neutral-800 bg-neutral-900 py-1 text-sm shadow-xl outline-none">
+            <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-neutral-500">
+              {path}/ ({count})
+            </div>
+            {isRemoteRoot ? (
+              <>
+                <Menu.Item
+                  onClick={onFetchRemote}
+                  className="block w-full cursor-default px-3 py-1.5 text-left text-neutral-200 outline-none data-[highlighted]:bg-neutral-800"
+                >
+                  Fetch
+                </Menu.Item>
+                <Menu.Item
+                  onClick={onSetRemoteUrl}
+                  className="block w-full cursor-default px-3 py-1.5 text-left text-neutral-200 outline-none data-[highlighted]:bg-neutral-800"
+                >
+                  Set URLs…
+                </Menu.Item>
+              </>
+            ) : (
+              <>
+                <Menu.Item
+                  onClick={onPullAll}
+                  className="block w-full cursor-default px-3 py-1.5 text-left text-neutral-200 outline-none data-[highlighted]:bg-neutral-800"
+                >
+                  Pull all
+                </Menu.Item>
+                <Menu.Item
+                  onClick={onDeleteAll}
+                  className="block w-full cursor-default px-3 py-1.5 text-left text-red-400 outline-none data-[highlighted]:bg-neutral-800"
+                >
+                  Delete all…
+                </Menu.Item>
+              </>
+            )}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }

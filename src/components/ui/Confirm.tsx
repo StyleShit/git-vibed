@@ -1,11 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState } from "react";
-import { Dialog } from "./Dialog";
-
-// Replacement for the browser `confirm()` dialog — matches the app theme,
-// supports a danger style for destructive actions, and runs through the
-// same React reconciler so stacking/rendering behaves predictably
-// (unlike the synchronous native prompt, which blocks the event loop
-// and occasionally leaves hover state stuck on the row that opened it).
+import { AlertDialog } from "@base-ui-components/react/alert-dialog";
 
 interface ConfirmOptions {
   title: string;
@@ -52,38 +46,53 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     <ConfirmContext.Provider value={ask}>
       {children}
       {current && (
-        <Dialog title={current.title} onClose={() => close(false)} width={420}>
-          <p className="mb-4 whitespace-pre-wrap text-sm leading-relaxed text-neutral-300">
-            {current.message}
-          </p>
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={() => close(false)}
-              className="rounded px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800"
-              autoFocus
+        <AlertDialog.Root
+          open
+          onOpenChange={(open) => {
+            if (!open) close(false);
+          }}
+        >
+          <AlertDialog.Portal>
+            <AlertDialog.Backdrop className="gui-backdrop-in fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" />
+            <AlertDialog.Popup
+              style={{ width: 420 }}
+              className="gui-modal-in fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-neutral-800 bg-neutral-900 p-4 shadow-2xl"
             >
-              {current.cancelLabel ?? "Cancel"}
-            </button>
-            <button
-              onClick={() => close(true)}
-              className={`rounded px-3 py-1.5 text-sm text-white transition ${
-                current.danger
-                  ? "bg-red-600 hover:bg-red-500"
-                  : "bg-indigo-600 hover:bg-indigo-500"
-              }`}
-            >
-              {current.confirmLabel ?? "Confirm"}
-            </button>
-          </div>
-        </Dialog>
+              <div className="mb-3 flex items-center justify-between">
+                <AlertDialog.Title className="text-sm font-semibold">
+                  {current.title}
+                </AlertDialog.Title>
+              </div>
+              <p className="mb-4 whitespace-pre-wrap text-sm leading-relaxed text-neutral-300">
+                {current.message}
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => close(false)}
+                  className="rounded px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800"
+                  autoFocus
+                >
+                  {current.cancelLabel ?? "Cancel"}
+                </button>
+                <button
+                  onClick={() => close(true)}
+                  className={`rounded px-3 py-1.5 text-sm text-white transition ${
+                    current.danger
+                      ? "bg-red-600 hover:bg-red-500"
+                      : "bg-indigo-600 hover:bg-indigo-500"
+                  }`}
+                >
+                  {current.confirmLabel ?? "Confirm"}
+                </button>
+              </div>
+            </AlertDialog.Popup>
+          </AlertDialog.Portal>
+        </AlertDialog.Root>
       )}
     </ConfirmContext.Provider>
   );
 }
 
-// Hook used by components that want to pop a confirm without passing the
-// provider context explicitly. Returns a stable async function so it
-// can be called inside effects or event handlers without re-renders.
 export function useConfirm(): Confirmer {
   const ctx = useContext(ConfirmContext);
   if (!ctx) {
