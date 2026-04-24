@@ -10,6 +10,7 @@ import {
   gitTagsOptions,
   gitUndoOptions,
   gitWorktreesOptions,
+  repoKey,
 } from "./gitApi";
 
 // Invalidate a list of query keys in one go. Helper because every
@@ -663,5 +664,59 @@ export function resolveWithDeleteMutation(
       await unwrap(window.gitApi.resolveWithDelete(filePath));
     },
     onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+  };
+}
+
+// --- Pull requests (GitHub) ----------------------------------------------
+
+type PRCreateOpts = import("@shared/types").PRCreateOptions;
+type PRReviewOpts = import("@shared/types").PRReviewOptions;
+type MergeMethod = import("@shared/types").MergeMethod;
+type PullRequest = import("@shared/types").PullRequest;
+
+// PR mutations invalidate the entire prs bucket regardless of state
+// filter (github returns all buckets on refetch; simpler than scoping).
+function invalidatePRs(path: string) {
+  queryClient.invalidateQueries({ queryKey: [...repoKey(path), "prs"] });
+}
+
+export function prCreateMutation(
+  path: string,
+): UseMutationOptions<PullRequest, Error, PRCreateOpts> {
+  return {
+    mutationFn: async (opts) => unwrap(window.ghApi.prCreate(opts)),
+    onSuccess: () => invalidatePRs(path),
+  };
+}
+
+interface PRMergeInput {
+  number: number;
+  method: MergeMethod;
+}
+
+export function prMergeMutation(
+  path: string,
+): UseMutationOptions<void, Error, PRMergeInput> {
+  return {
+    mutationFn: async ({ number, method }) => {
+      await unwrap(window.ghApi.prMerge(number, method));
+    },
+    // PR merge lands commits on the base branch, which moves HEAD + refs
+    // once the user pulls; invalidate remote sync keys too.
+    onSuccess: () => {
+      invalidatePRs(path);
+      afterRemoteSync(path);
+    },
+  };
+}
+
+export function prReviewMutation(
+  path: string,
+): UseMutationOptions<void, Error, PRReviewOpts> {
+  return {
+    mutationFn: async (opts) => {
+      await unwrap(window.ghApi.prReview(opts));
+    },
+    onSuccess: () => invalidatePRs(path),
   };
 }

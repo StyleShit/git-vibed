@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { unwrap } from "../../lib/ipc";
+import {
+  prMergeMutation,
+  prReviewMutation,
+} from "../../queries/mutations";
 import { useConfirm } from "../ui/Confirm";
 import type { Check, MergeMethod, PullRequest } from "@shared/types";
 
@@ -8,6 +14,9 @@ export function PRDetail() {
   const selected = useUI((s) => s.selectedPR);
   const selectPR = useUI((s) => s.selectPR);
   const toast = useUI((s) => s.toast);
+  const activePath = useActiveTab()?.path;
+  const prMergeMut = useMutation(prMergeMutation(activePath ?? ""));
+  const prReviewMut = useMutation(prReviewMutation(activePath ?? ""));
   const confirmDialog = useConfirm();
   const [pr, setPr] = useState<PullRequest | null>(null);
   const [checks, setChecks] = useState<Check[]>([]);
@@ -44,7 +53,7 @@ export function PRDetail() {
     setBusy(true);
     setMergeMenu(false);
     try {
-      await unwrap(window.ghApi.prMerge(pr.number, method));
+      await prMergeMut.mutateAsync({ number: pr.number, method });
       toast("success", "Merged");
       setPr({ ...pr, state: "MERGED" });
     } catch (e) {
@@ -58,7 +67,7 @@ export function PRDetail() {
     if (!pr) return;
     setBusy(true);
     try {
-      await unwrap(window.ghApi.prReview({ number: pr.number, action, body: reviewBody }));
+      await prReviewMut.mutateAsync({ number: pr.number, action, body: reviewBody });
       toast("success", `Review submitted (${action})`);
       setReviewBody("");
     } catch (e) {

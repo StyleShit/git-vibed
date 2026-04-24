@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap, maybe } from "../../lib/ipc";
+import { maybe } from "../../lib/ipc";
 import {
   gitBranchesOptions,
   gitStatusOptions,
 } from "../../queries/gitApi";
+import { prCreateMutation } from "../../queries/mutations";
 
 export function PRCreateDialog({
   onClose,
@@ -21,7 +22,7 @@ export function PRCreateDialog({
   const activePath = useActiveTab()?.path;
   const status = useQuery(gitStatusOptions(activePath)).data ?? null;
   const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
-  const refreshPRs = useRepo((s) => s.refreshPRs);
+  const prCreateMut = useMutation(prCreateMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const head = headBranch ?? status?.branch ?? "";
   const [title, setTitle] = useState(head);
@@ -44,11 +45,15 @@ export function PRCreateDialog({
   async function create() {
     setBusy(true);
     try {
-      const pr = await unwrap(
-        window.ghApi.prCreate({ title, body, base, head, draft, reviewers }),
-      );
+      const pr = await prCreateMut.mutateAsync({
+        title,
+        body,
+        base,
+        head,
+        draft,
+        reviewers,
+      });
       toast("success", `Opened PR #${pr.number}`);
-      await refreshPRs();
       onClose();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
