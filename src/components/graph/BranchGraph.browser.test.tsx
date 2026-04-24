@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { waitFor } from "@testing-library/react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import type { Commit } from "@shared/types";
 import { renderWithRepo } from "../../test/renderWithRepo";
-import { useRepo } from "../../stores/repo";
+import { gitLogOptions } from "../../queries/gitApi";
 
 const REPO = "/repo";
 
@@ -18,24 +19,42 @@ function commit(hash: string, subject: string, parents: string[] = []): Commit {
   };
 }
 
-describe("commit → REPO_CHANGED head event refreshes log", () => {
-  it("adds the new commit to useRepo.tabs[].commits", async () => {
-    const before: Commit[] = [commit("a1", "first")];
-    const after: Commit[] = [commit("b2", "new commit", ["a1"]), commit("a1", "first")];
+// Tiny consumer so the query has an active subscriber — invalidateQueries
+// only refetches active queries by default, which matches the production
+// shape (BranchGraph itself subscribes to gitLogOptions).
+function LogProbe() {
+  useInfiniteQuery(gitLogOptions(REPO));
+  return null;
+}
 
-    renderWithRepo(<div data-testid="anchor" />, {
-      initialTab: { path: REPO, commits: before },
+describe("commit → REPO_CHANGED head event refetches the log", () => {
+  it("adds the new commit to the log query cache", async () => {
+    const before: Commit[] = [commit("a1", "first")];
+    const after: Commit[] = [
+      commit("b2", "new commit", ["a1"]),
+      commit("a1", "first"),
+    ];
+
+    window.__gitApiMock.stub("log", () => before);
+
+    const { queryClient } = renderWithRepo(<LogProbe />, {
+      initialTab: { path: REPO },
     });
 
-    expect(useRepo.getState().tabs[0].commits.map((c) => c.hash)).toEqual(["a1"]);
+    // Wait for the initial fetch.
+    await waitFor(() => {
+      const log = queryClient.getQueryData(gitLogOptions(REPO).queryKey);
+      const hashes = log?.pages.flat().map((c) => c.hash) ?? [];
+      expect(hashes).toEqual(["a1"]);
+    });
 
-    // Simulate: commit succeeds, watcher then emits a head change.
     await window.gitApi.commit({ message: "new commit" });
     window.__gitApiMock.stub("log", () => after);
     window.__emitRepoChanged({ repoPath: REPO, type: "head" });
 
     await waitFor(() => {
-      const hashes = useRepo.getState().tabs[0].commits.map((c) => c.hash);
+      const log = queryClient.getQueryData(gitLogOptions(REPO).queryKey);
+      const hashes = log?.pages.flat().map((c) => c.hash) ?? [];
       expect(hashes).toEqual(["b2", "a1"]);
     });
   });

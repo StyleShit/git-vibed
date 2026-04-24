@@ -77,7 +77,6 @@ export function CommandPalette() {
   const pullMut = useMutation(pullMutation(activePath ?? ""));
   const pushMut = useMutation(pushMutation(activePath ?? ""));
   const fetchMut = useMutation(fetchMutation(activePath ?? ""));
-  const refreshAll = useRepo((s) => s.refreshAll);
   const openRepo = useRepo((s) => s.openRepo);
   const pullStrategy = useSettings((s) => s.defaultPullStrategy);
   const [query, setQuery] = useState("");
@@ -337,7 +336,6 @@ export function CommandPalette() {
     pullStrategy,
     setView,
     selectCommit,
-    refreshAll,
     openRepo,
     toast,
   ]);

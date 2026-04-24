@@ -1,76 +1,28 @@
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
-import type {
-  Branch,
-  Commit,
-  PullRequest,
-  RepoStatus,
-  Remote,
-  Stash,
-  Tag,
-  UndoState,
-  Worktree,
-} from "@shared/types";
 import { unwrap, maybe } from "../lib/ipc";
 import { useUI } from "./ui";
-import { useSettings } from "./settings";
-import { queryClient } from "../queries/client";
-import { repoKey } from "../queries/gitApi";
 
-// Per-tab data. Each open repository has its own slice, so switching tabs
-// surfaces the other repo's state instantly without re-fetching.
+// Per-tab identity. Server-state (status / branches / commits / …) lives
+// in TanStack Query under ["repo", path, …]; this store only carries
+// what's intrinsic to the open tab plus two ephemeral UI flags driven by
+// the fetch lifecycle.
 export interface TabData {
   path: string;
-  status: RepoStatus | null;
-  branches: Branch[];
-  commits: Commit[];
-  // True once git log returned fewer than a full page — means there are no
-  // older commits to paginate into. Prevents infinite scroll from firing
-  // repeated no-op fetches at the bottom of the list.
-  commitsExhausted: boolean;
-  loadingMoreCommits: boolean;
-  remotes: Remote[];
-  prs: PullRequest[];
-  stashes: Stash[];
-  tags: Tag[];
-  worktrees: Worktree[];
-  // Mirror of the main process's per-session HEAD undo/redo state. Kept
-  // alongside status so the toolbar can reflect it without polling a
-  // dedicated channel.
-  undo: UndoState;
-  ghAvailable: boolean;
+  // Driven by onFetchComplete in App.tsx. Auto-fetch reports a fresher
+  // behind count than `git status` does, so the StatusBar prefers it.
   behindRemote: number;
-  loading: boolean;
-  // True while a background auto-fetch tick is running for this repo.
-  // The toolbar Fetch button reads this to show a subtle spinner without
-  // disabling itself (unlike user-initiated fetches which also set `busy`).
+  // Driven by onFetchStart / onFetchComplete in App.tsx — toolbar shows
+  // a subtle spinner while a background fetch tick is running.
   backgroundFetching: boolean;
 }
-
-const LOG_PAGE_SIZE = 500;
 
 interface RepoState {
   tabs: TabData[];
   activeIdx: number;
-
-  // Tab lifecycle
   openRepo: (path: string) => Promise<void>;
   closeTab: (path: string) => Promise<void>;
   setActive: (idx: number) => Promise<void>;
-
-  // Per-tab data updaters (always operate on active tab unless specified).
-  patchTab: (path: string, patch: Partial<TabData>) => void;
-  refreshAll: (repoPath?: string) => Promise<void>;
-  refreshStatus: (repoPath?: string) => Promise<void>;
-  refreshBranches: (repoPath?: string) => Promise<void>;
-  refreshLog: (opts?: { all?: boolean }, repoPath?: string) => Promise<void>;
-  loadMoreCommits: (repoPath?: string) => Promise<void>;
-  refreshRemotes: (repoPath?: string) => Promise<void>;
-  refreshPRs: (repoPath?: string) => Promise<void>;
-  refreshStashes: (repoPath?: string) => Promise<void>;
-  refreshTags: (repoPath?: string) => Promise<void>;
-  refreshWorktrees: (repoPath?: string) => Promise<void>;
-  refreshUndoState: (repoPath?: string) => Promise<void>;
   setBehindRemote: (repoPath: string, v: number) => void;
   setBackgroundFetching: (repoPath: string, v: boolean) => void;
 }
@@ -83,21 +35,18 @@ const opensInFlight = new Set<string>();
 function emptyTab(path: string): TabData {
   return {
     path,
-    status: null,
-    branches: [],
-    commits: [],
-    commitsExhausted: false,
-    loadingMoreCommits: false,
-    remotes: [],
-    prs: [],
-    stashes: [],
-    tags: [],
-    worktrees: [],
-    undo: { canUndo: false, canRedo: false },
-    ghAvailable: false,
     behindRemote: 0,
-    loading: true,
     backgroundFetching: false,
+  };
+}
+
+function patchTab(
+  state: RepoState,
+  path: string,
+  patch: Partial<TabData>,
+): Partial<RepoState> {
+  return {
+    tabs: state.tabs.map((t) => (t.path === path ? { ...t, ...patch } : t)),
   };
 }
 
@@ -140,14 +89,11 @@ export const useRepo = create<RepoState>((set, get) => ({
         await get().setActive(postIdx);
         return;
       }
-      const ghAvailable = (await maybe(window.ghApi.available())) ?? false;
       set((s) => ({
-        tabs: [...s.tabs, { ...emptyTab(resolved), ghAvailable }],
+        tabs: [...s.tabs, emptyTab(resolved)],
         activeIdx: s.tabs.length,
       }));
       queueSessionWrite(get());
-      await get().refreshAll(resolved);
-      get().patchTab(resolved, { loading: false });
     } finally {
       opensInFlight.delete(repoPath);
     }
@@ -191,173 +137,22 @@ export const useRepo = create<RepoState>((set, get) => ({
     // the history graph on switch. Settings is app-wide so we leave it alone.
     if (ui.view !== "graph" && ui.view !== "settings") ui.setView("graph");
     queueSessionWrite(get());
-    // Background refresh after switching so stale cached data gets updated.
-    // This is awaited only implicitly — the tab becomes active immediately
-    // with whatever we have, and new data streams in as git replies.
-    void get().refreshAll(tab.path);
   },
 
-  patchTab: (path, patch) => {
-    set((s) => ({
-      tabs: s.tabs.map((t) => (t.path === path ? { ...t, ...patch } : t)),
-    }));
-  },
-
-  // Transition-period bridge: every old-style refreshX mirrors its result
-  // into zustand (for consumers that haven't migrated) AND invalidates the
-  // matching TanStack Query key so queries stay in sync in the same tick.
-  // Once Step E removes the zustand mirror, these methods disappear.
-  refreshAll: async (repoPath) => {
-    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
-    if (!path) return;
-    await Promise.all([
-      get().refreshStatus(path),
-      get().refreshBranches(path),
-      get().refreshLog({ all: true }, path),
-      get().refreshRemotes(path),
-      get().refreshPRs(path),
-      get().refreshStashes(path),
-      get().refreshTags(path),
-      get().refreshWorktrees(path),
-      get().refreshUndoState(path),
-    ]);
-    queryClient.invalidateQueries({ queryKey: repoKey(path) });
-  },
-
-  refreshStatus: async (repoPath) => {
-    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
-    if (!path) return;
-    const status = await maybe(window.gitApi.status());
-    if (status) get().patchTab(path, { status });
-    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "status"] });
-  },
-
-  refreshBranches: async (repoPath) => {
-    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
-    if (!path) return;
-    const branches = await maybe(window.gitApi.branches());
-    if (branches) get().patchTab(path, { branches });
-    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "branches"] });
-  },
-
-  refreshLog: async (opts, repoPath) => {
-    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
-    if (!path) return;
-    const commits = await maybe(
-      window.gitApi.log({ all: opts?.all ?? true, limit: LOG_PAGE_SIZE }),
-    );
-    if (commits) {
-      get().patchTab(path, {
-        commits,
-        commitsExhausted: commits.length < LOG_PAGE_SIZE,
-        loadingMoreCommits: false,
-      });
-    }
-    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "log"] });
-  },
-
-  loadMoreCommits: async (repoPath) => {
-    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
-    if (!path) return;
-    const tab = get().tabs.find((t) => t.path === path);
-    if (!tab || tab.commitsExhausted || tab.loadingMoreCommits) return;
-    get().patchTab(path, { loadingMoreCommits: true });
-    const next = await maybe(
-      window.gitApi.log({
-        all: true,
-        limit: LOG_PAGE_SIZE,
-        skip: tab.commits.length,
-      }),
-    );
-    if (!next) {
-      get().patchTab(path, { loadingMoreCommits: false });
-      return;
-    }
-    // Dedupe by hash in case refreshLog races with loadMoreCommits and the
-    // two batches overlap at a page boundary.
-    const seen = new Set(tab.commits.map((c) => c.hash));
-    const appended = next.filter((c) => !seen.has(c.hash));
-    get().patchTab(path, {
-      commits: [...tab.commits, ...appended],
-      commitsExhausted: next.length < LOG_PAGE_SIZE,
-      loadingMoreCommits: false,
-    });
-  },
-
-  refreshRemotes: async (repoPath) => {
-    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
-    if (!path) return;
-    const remotes = await maybe(window.gitApi.remotes());
-    if (remotes) get().patchTab(path, { remotes });
-    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "remotes"] });
-  },
-
-  refreshPRs: async (repoPath) => {
-    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
-    if (!path) return;
-    const tab = get().tabs.find((t) => t.path === path);
-    if (!tab?.ghAvailable) {
-      get().patchTab(path, { prs: [] });
-      queryClient.invalidateQueries({ queryKey: [...repoKey(path), "prs"] });
-      return;
-    }
-    const stateFilter = useSettings.getState().prStateFilter;
-    const prs = await maybe(window.ghApi.prList(stateFilter));
-    get().patchTab(path, { prs: prs ?? [] });
-    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "prs"] });
-  },
-
-  refreshStashes: async (repoPath) => {
-    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
-    if (!path) return;
-    const stashes = await maybe(window.gitApi.stashList());
-    if (stashes) get().patchTab(path, { stashes });
-    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "stashes"] });
-  },
-
-  refreshTags: async (repoPath) => {
-    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
-    if (!path) return;
-    const tags = await maybe(window.gitApi.tags());
-    if (tags) get().patchTab(path, { tags });
-    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "tags"] });
-  },
-
-  refreshWorktrees: async (repoPath) => {
-    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
-    if (!path) return;
-    const worktrees = await maybe(window.gitApi.worktreeList());
-    if (worktrees) get().patchTab(path, { worktrees });
-    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "worktrees"] });
-  },
-
-  refreshUndoState: async (repoPath) => {
-    const path = repoPath ?? get().tabs[get().activeIdx]?.path;
-    if (!path) return;
-    const undo = await maybe(window.gitApi.undoState());
-    if (undo) get().patchTab(path, { undo });
-    queryClient.invalidateQueries({ queryKey: [...repoKey(path), "undo"] });
-  },
-
-  setBehindRemote: (path, behindRemote) => get().patchTab(path, { behindRemote }),
+  setBehindRemote: (path, behindRemote) =>
+    set((s) => patchTab(s, path, { behindRemote })),
   setBackgroundFetching: (path, backgroundFetching) =>
-    get().patchTab(path, { backgroundFetching }),
+    set((s) => patchTab(s, path, { backgroundFetching })),
 }));
 
-// Convenience selector — returns the active tab's data. Components that used
-// to read from useRepo should now use this.
+// Convenience selector — returns the active tab's identity. Server-state
+// reads should use the queryOptions factories under src/queries/gitApi.ts.
 export function useActiveTab(): TabData | null {
   return useRepo((s) => s.tabs[s.activeIdx] ?? null);
 }
 
-// Shallow-equality selector for reading multiple fields off the active tab in
-// one go without tripping React's identity checks.
+// Shallow-equality selector for reading multiple fields off the active tab.
+// Mostly useful for grabbing path + a UI flag in one render.
 export function useActiveTabShallow<T>(picker: (t: TabData | null) => T): T {
   return useRepo(useShallow((s) => picker(s.tabs[s.activeIdx] ?? null)));
-}
-
-// Grab a specific field off the active tab. Returns undefined when no tab is
-// open, so callers can fall back to sensible defaults (empty arrays, null).
-export function useActive<K extends keyof TabData>(key: K): TabData[K] | undefined {
-  return useRepo((s) => s.tabs[s.activeIdx]?.[key]);
 }

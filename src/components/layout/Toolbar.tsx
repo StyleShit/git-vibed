@@ -60,7 +60,6 @@ export function Toolbar() {
   const toast = useUI((s) => s.toast);
   const setCommandPalette = useUI((s) => s.setCommandPalette);
   const view = useUI((s) => s.view);
-  const refreshAll = useRepo((s) => s.refreshAll);
   const confirmDialog = useConfirm();
   const defaultStrategy = useSettings((s) => s.defaultPullStrategy);
   // Most history/sync actions are nonsense while resolving a merge:

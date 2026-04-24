@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
 import { createPortal } from "react-dom";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
-import { useActiveTab, useRepo } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import {
   gitBranchesOptions,
   gitLogOptions,
@@ -746,7 +746,6 @@ function RefBadge({
 }) {
   const setHovered = useUI((s) => s.setHoveredBranch);
   const toast = useUI((s) => s.toast);
-  const refreshAll = useRepo((s) => s.refreshAll);
   const confirmDialog = useConfirm();
   const activePath = useActiveTab()?.path;
   const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
@@ -990,7 +989,6 @@ function RefBranchMenuHost({
   const [renaming, setRenaming] = useState<import("@shared/types").Branch | null>(null);
   const [prHead, setPrHead] = useState<string | null>(null);
   const [createFromBase, setCreateFromBase] = useState<string | null>(null);
-  const refreshAll = useRepo((s) => s.refreshAll);
   const activePath = useActiveTab()?.path;
   const branchRenameMut = useMutation(branchRenameMutation(activePath ?? ""));
   const mergeMut = useMutation(mergeMutation(activePath ?? ""));

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Branch } from "@shared/types";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
@@ -47,7 +47,6 @@ export function BranchContextMenu({
   onCreateBranch,
 }: Props) {
   const toast = useUI((s) => s.toast);
-  const refreshAll = useRepo((s) => s.refreshAll);
   const activePath = useActiveTab()?.path;
   const branchDeleteMut = useMutation(branchDeleteMutation(activePath ?? ""));
   const branchSetUpstreamMut = useMutation(
@@ -88,7 +87,6 @@ export function BranchContextMenu({
     try {
       await fn();
       if (successMsg) toast("success", successMsg);
-      await refreshAll();
     } catch (e) {
       toast("error", `${label}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {

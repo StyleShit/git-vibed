@@ -3,6 +3,8 @@ import { useRepo } from "../stores/repo";
 import { useUI } from "../stores/ui";
 import { useSettings } from "../stores/settings";
 import { unwrap } from "../lib/ipc";
+import { queryClient } from "../queries/client";
+import { gitLogOptions, gitStatusOptions, repoKey } from "../queries/gitApi";
 
 export function useKeyboardShortcuts() {
   const toast = useUI((s) => s.toast);
@@ -52,9 +54,11 @@ export function useKeyboardShortcuts() {
         if (!active) return;
         const ui = useUI.getState();
         if (ui.selectedCommit == null) return;
-        const idx = active.commits.findIndex((c) => c.hash === ui.selectedCommit);
+        const log = queryClient.getQueryData(gitLogOptions(active.path).queryKey);
+        const commits = log?.pages.flat() ?? [];
+        const idx = commits.findIndex((c) => c.hash === ui.selectedCommit);
         if (idx < 0) return;
-        const cur = active.commits[idx];
+        const cur = commits[idx];
         if (e.shiftKey) {
           if (e.key === "ArrowDown") {
             const parentHash = cur.parents[0];
@@ -63,7 +67,7 @@ export function useKeyboardShortcuts() {
               ui.selectCommit(parentHash);
             }
           } else {
-            const child = active.commits.find((c) => c.parents.includes(cur.hash));
+            const child = commits.find((c) => c.parents.includes(cur.hash));
             if (child) {
               e.preventDefault();
               ui.selectCommit(child.hash);
@@ -71,7 +75,7 @@ export function useKeyboardShortcuts() {
           }
         } else {
           const step = e.key === "ArrowDown" ? 1 : -1;
-          const next = active.commits[idx + step];
+          const next = commits[idx + step];
           if (next) {
             e.preventDefault();
             ui.selectCommit(next.hash);
@@ -96,7 +100,9 @@ export function useKeyboardShortcuts() {
 
       const active = useRepo.getState().tabs[useRepo.getState().activeIdx];
       if (!active) return;
-      const status = active.status;
+      const status = queryClient.getQueryData(
+        gitStatusOptions(active.path).queryKey,
+      );
 
       // Cmd/Ctrl + W — close the active tab. Don't fire inside a text
       // input since users expect the OS "delete word" shortcut there.
@@ -141,7 +147,7 @@ export function useKeyboardShortcuts() {
             const res = await unwrap(window.gitApi.undoHead());
             toast("success", res?.label ? `Undid: ${res.label}` : "Undone");
           }
-          await useRepo.getState().refreshAll();
+          await queryClient.invalidateQueries({ queryKey: repoKey(active.path) });
         } catch (err) {
           toast("error", err instanceof Error ? err.message : String(err));
         }
@@ -159,6 +165,7 @@ export function useKeyboardShortcuts() {
             }),
           );
           toast("success", "Pushed");
+          await queryClient.invalidateQueries({ queryKey: repoKey(active.path) });
         } catch (err) {
           toast("error", `Push failed: ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -169,6 +176,7 @@ export function useKeyboardShortcuts() {
         try {
           await unwrap(window.gitApi.pull({ strategy: pullStrategy }));
           toast("success", "Pulled");
+          await queryClient.invalidateQueries({ queryKey: repoKey(active.path) });
         } catch (err) {
           toast("error", `Pull failed: ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -179,6 +187,7 @@ export function useKeyboardShortcuts() {
         try {
           await unwrap(window.gitApi.fetch({ all: true, prune: true }));
           toast("success", "Fetched");
+          await queryClient.invalidateQueries({ queryKey: repoKey(active.path) });
         } catch (err) {
           toast("error", `Fetch failed: ${err instanceof Error ? err.message : String(err)}`);
         }

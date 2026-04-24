@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "./components/layout/Sidebar";
 import { MainPanel } from "./components/layout/MainPanel";
 import { StatusBar } from "./components/layout/StatusBar";
@@ -12,6 +13,7 @@ import { useRepo, useActiveTab } from "./stores/repo";
 import { useSettings } from "./stores/settings";
 import { useUI } from "./stores/ui";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { gitStatusOptions } from "./queries/gitApi";
 
 export function App() {
   const tabs = useRepo((s) => s.tabs);
@@ -50,46 +52,16 @@ export function App() {
     void window.gitApi.setAutoFetchInterval(autoFetchIntervalMs);
   }, [autoFetchIntervalMs]);
 
-  // Fan-in watcher events from the main process. Each event carries its
-  // repoPath so we only refresh the matching tab rather than everything.
+  // Fetch lifecycle still lives here because backgroundFetching +
+  // behindRemote are zustand UI state, not server-state. The
+  // REPO_CHANGED + fetch-complete cache invalidations both run from
+  // RepoEventBridge in src/queries/RepoEventBridge.tsx.
   useEffect(() => {
-    const {
-      refreshStatus,
-      refreshBranches,
-      refreshLog,
-      refreshStashes,
-      refreshTags,
-      refreshWorktrees,
-      refreshUndoState,
-      setBehindRemote,
-      setBackgroundFetching,
-    } = useRepo.getState();
-    const off1 = window.gitApi.onRepoChanged((e) => {
-      const target = e.repoPath;
-      if (e.type === "index" || e.type === "worktree") {
-        void refreshStatus(target);
-        void refreshStashes(target);
-      }
-      if (e.type === "head") {
-        void refreshStatus(target);
-        void refreshBranches(target);
-        void refreshLog({ all: true }, target);
-        void refreshWorktrees(target);
-        void refreshUndoState(target);
-      }
-      if (e.type === "refs") {
-        void refreshBranches(target);
-        void refreshLog({ all: true }, target);
-        void refreshTags(target);
-      }
-    });
-    // Keep the background-fetch indicator visible for at least MIN_SPINNER_MS
-    // even when the fetch itself returns in a few dozen ms. Otherwise the
-    // icon flickers so briefly the user can't tell a fetch ran at all.
+    const { setBehindRemote, setBackgroundFetching } = useRepo.getState();
     const MIN_SPINNER_MS = 700;
     const startedAt = new Map<string, number>();
 
-    const off2 = window.gitApi.onFetchComplete((e) => {
+    const offComplete = window.gitApi.onFetchComplete((e) => {
       setBehindRemote(e.repoPath, e.behind);
       const began = startedAt.get(e.repoPath);
       const elapsed = began != null ? Date.now() - began : MIN_SPINNER_MS;
@@ -100,33 +72,18 @@ export function App() {
       } else {
         window.setTimeout(
           () => setBackgroundFetching(e.repoPath, false),
-          remaining
+          remaining,
         );
       }
-      if (e.errors) {
-        toast("error", `Auto-fetch failed: ${e.errors}`);
-        return;
-      }
-      // The FS watcher skips `refs/remotes/**` to avoid EMFILE on large
-      // repos, so it won't wake up when a fetch writes loose remote refs.
-      // Drive the refresh off the fetch event instead — but only when the
-      // main process reports that something actually moved, so a no-op
-      // tick doesn't churn the UI every minute.
-      if (e.changed) {
-        void refreshBranches(e.repoPath);
-        void refreshLog({ all: true }, e.repoPath);
-        void refreshTags(e.repoPath);
-        void refreshStatus(e.repoPath);
-      }
+      if (e.errors) toast("error", `Auto-fetch failed: ${e.errors}`);
     });
-    const off3 = window.gitApi.onFetchStart((e) => {
+    const offStart = window.gitApi.onFetchStart((e) => {
       startedAt.set(e.repoPath, Date.now());
       setBackgroundFetching(e.repoPath, true);
     });
     return () => {
-      off1();
-      off2();
-      off3();
+      offComplete();
+      offStart();
     };
   }, [toast]);
 
@@ -158,41 +115,20 @@ export function App() {
   }, []);
 
   // Reflect the active tab in the window title.
+  const activeBranch =
+    useQuery(gitStatusOptions(activeTab?.path)).data?.branch ?? null;
   useEffect(() => {
     if (activeTab) {
       const folder = activeTab.path.split(/[\\/]/).pop();
-      const branch = activeTab.status?.branch
-        ? ` — ${activeTab.status.branch}`
-        : "";
+      const branch = activeBranch ? ` — ${activeBranch}` : "";
       document.title = `${folder}${branch} · Git Vibed`;
     } else {
       document.title = "Git Vibed";
     }
-  }, [activeTab?.path, activeTab?.status?.branch]);
+  }, [activeTab?.path, activeBranch]);
 
-  // Work-tree edits don't touch .git, so the main-process watcher won't fire.
-  // Poll `git status` on focus + periodically while the window is visible so
-  // unstaged changes still show up without the crash-prone chokidar walk over
-  // the whole working tree.
-  useEffect(() => {
-    if (!activeTab) return;
-    const poll = () => {
-      if (document.visibilityState === "visible") {
-        void useRepo.getState().refreshStatus(activeTab.path);
-      }
-    };
-    poll();
-    const onFocus = () => poll();
-    const onVis = () => poll();
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVis);
-    const interval = window.setInterval(poll, 5_000);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVis);
-      clearInterval(interval);
-    };
-  }, [activeTab?.path]);
+  // Work-tree polling is now handled by the refetchInterval +
+  // refetchOnWindowFocus options on gitStatusOptions itself.
 
   if (tabs.length === 0) {
     return (

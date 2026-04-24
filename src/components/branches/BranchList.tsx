@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
@@ -63,7 +63,6 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
   const pullBranchMut = useMutation(pullBranchMutation(activePath ?? ""));
   const fetchMut = useMutation(fetchMutation(activePath ?? ""));
   const mergeMut = useMutation(mergeMutation(activePath ?? ""));
-  const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);
   const confirmDialog = useConfirm();
@@ -181,7 +180,6 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
         errors.push(`${b.name}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    await refreshAll();
     if (errors.length === 0) {
       toast("success", `Pulled ${targets.length} branches`);
     } else {
