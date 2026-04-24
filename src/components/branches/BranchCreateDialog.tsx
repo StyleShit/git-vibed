@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 import {
   gitBranchesOptions,
   gitStatusOptions,
 } from "../../queries/gitApi";
-import { branchCreateMutation } from "../../queries/mutations";
+import {
+  branchCreateMutation,
+  checkoutMutation,
+} from "../../queries/mutations";
 
 export function BranchCreateDialog({
   onClose,
@@ -21,7 +23,7 @@ export function BranchCreateDialog({
   const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
   const status = useQuery(gitStatusOptions(activePath)).data ?? null;
   const branchCreateMut = useMutation(branchCreateMutation(activePath ?? ""));
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const checkoutMut = useMutation(checkoutMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const [name, setName] = useState("");
   const [base, setBase] = useState(initialBase ?? status?.branch ?? "HEAD");
@@ -33,12 +35,7 @@ export function BranchCreateDialog({
     setBusy(true);
     try {
       await branchCreateMut.mutateAsync({ name: name.trim(), base });
-      if (checkout) {
-        // Checkout migrates in D.7. Keep the old unwrap+refreshAll
-        // pair so HEAD + status flow everywhere until then.
-        await unwrap(window.gitApi.checkout(name.trim()));
-        await refreshAll();
-      }
+      if (checkout) await checkoutMut.mutateAsync(name.trim());
       toast("success", `Created ${name.trim()}`);
       onClose();
     } catch (e) {

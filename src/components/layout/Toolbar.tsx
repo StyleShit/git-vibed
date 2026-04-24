@@ -11,8 +11,11 @@ import {
   gitUndoOptions,
 } from "../../queries/gitApi";
 import {
+  checkoutMutation,
+  redoHeadMutation,
   stashCreateMutation,
   stashPopMutation,
+  undoHeadMutation,
 } from "../../queries/mutations";
 import {
   BranchIcon,
@@ -46,6 +49,8 @@ export function Toolbar() {
     useQuery(gitUndoOptions(path)).data ?? { canUndo: false, canRedo: false };
   const stashCreateMut = useMutation(stashCreateMutation(path ?? ""));
   const stashPopMut = useMutation(stashPopMutation(path ?? ""));
+  const undoHeadMut = useMutation(undoHeadMutation(path ?? ""));
+  const redoHeadMut = useMutation(redoHeadMutation(path ?? ""));
   const toast = useUI((s) => s.toast);
   const setCommandPalette = useUI((s) => s.setCommandPalette);
   const view = useUI((s) => s.view);
@@ -151,9 +156,8 @@ export function Toolbar() {
     if (busy || !undo.canUndo) return;
     setBusy("undo");
     try {
-      const res = await unwrap(window.gitApi.undoHead());
+      const res = await undoHeadMut.mutateAsync();
       toast("success", res?.label ? `Undid: ${res.label}` : "Undone");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {
@@ -165,9 +169,8 @@ export function Toolbar() {
     if (busy || !undo.canRedo) return;
     setBusy("redo");
     try {
-      const res = await unwrap(window.gitApi.redoHead());
+      const res = await redoHeadMut.mutateAsync();
       toast("success", res?.label ? `Redid: ${res.label}` : "Redone");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {
@@ -395,7 +398,8 @@ function BranchSelector({
   currentBranch: string | null;
   disabled?: boolean;
 }) {
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const activePath = useActiveTabShallow((t) => t?.path ?? null);
+  const checkoutMut = useMutation(checkoutMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const [filter, setFilter] = useState("");
 
@@ -407,9 +411,8 @@ function BranchSelector({
 
   async function checkout(name: string) {
     try {
-      await unwrap(window.gitApi.checkout(name));
+      await checkoutMut.mutateAsync(name);
       toast("success", `Switched to ${name}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }

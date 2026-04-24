@@ -9,7 +9,12 @@ import {
   gitRemotesOptions,
   gitStatusOptions,
 } from "../../queries/gitApi";
-import { branchRenameMutation } from "../../queries/mutations";
+import {
+  branchRenameMutation,
+  checkoutCreateMutation,
+  checkoutMutation,
+  resetMutation,
+} from "../../queries/mutations";
 import { useUI } from "../../stores/ui";
 import type { GraphColumns } from "../../stores/settings";
 import { layoutCommits, type GraphLayout } from "../../lib/graph-layout";
@@ -745,6 +750,9 @@ function RefBadge({
   const activePath = useActiveTab()?.path;
   const branches = useQuery(gitBranchesOptions(activePath)).data ?? [];
   const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
+  const checkoutMut = useMutation(checkoutMutation(activePath ?? ""));
+  const checkoutCreateMut = useMutation(checkoutCreateMutation(activePath ?? ""));
+  const resetMut = useMutation(resetMutation(activePath ?? ""));
 
   // After parser normalization, refs come in short form:
   //   tag:<name>          — tag
@@ -801,9 +809,8 @@ function RefBadge({
       });
       if (!ok) return;
       try {
-        await unwrap(window.gitApi.checkout(branchName));
+        await checkoutMut.mutateAsync(branchName);
         toast("info", `Detached HEAD at ${branchName}`);
-        await refreshAll();
       } catch (err) {
         toast("error", err instanceof Error ? err.message : String(err));
       }
@@ -813,9 +820,8 @@ function RefBadge({
     // Local branch — straight checkout.
     if (kind === "local") {
       try {
-        await unwrap(window.gitApi.checkout(branchName));
+        await checkoutMut.mutateAsync(branchName);
         toast("success", `Switched to ${branchName}`);
-        await refreshAll();
       } catch (err) {
         toast("error", err instanceof Error ? err.message : String(err));
       }
@@ -832,7 +838,7 @@ function RefBadge({
 
     try {
       if (!localBranch) {
-        await unwrap(window.gitApi.checkoutCreate(localName, branchName));
+        await checkoutCreateMut.mutateAsync({ name: localName, startPoint: branchName });
         toast("success", `Created local branch ${localName}`);
       } else {
         const sameHead =
@@ -847,19 +853,18 @@ function RefBadge({
             cancelLabel: "Switch without reset",
             danger: true,
           });
-          await unwrap(window.gitApi.checkout(localName));
+          await checkoutMut.mutateAsync(localName);
           if (doReset) {
-            await unwrap(window.gitApi.reset(branchName, "hard"));
+            await resetMut.mutateAsync({ target: branchName, mode: "hard" });
             toast("success", `Switched to ${localName} (reset to ${branchName})`);
           } else {
             toast("success", `Switched to ${localName}`);
           }
         } else {
-          await unwrap(window.gitApi.checkout(localName));
+          await checkoutMut.mutateAsync(localName);
           toast("success", `Switched to ${localName}`);
         }
       }
-      await refreshAll();
     } catch (err) {
       toast("error", err instanceof Error ? err.message : String(err));
     }

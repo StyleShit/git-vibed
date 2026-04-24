@@ -15,6 +15,7 @@ import {
   prsOptions,
 } from "../../queries/gitApi";
 import {
+  checkoutMutation,
   stashApplyMutation,
   stashCreateMutation,
   stashPopMutation,
@@ -69,6 +70,7 @@ export function CommandPalette() {
   const stashCreateMut = useMutation(stashCreateMutation(activePath ?? ""));
   const stashPopMut = useMutation(stashPopMutation(activePath ?? ""));
   const stashApplyMut = useMutation(stashApplyMutation(activePath ?? ""));
+  const checkoutMut = useMutation(checkoutMutation(activePath ?? ""));
   const refreshAll = useRepo((s) => s.refreshAll);
   const openRepo = useRepo((s) => s.openRepo);
   const pullStrategy = useSettings((s) => s.defaultPullStrategy);
@@ -224,9 +226,8 @@ export function CommandPalette() {
         icon: <BranchIcon className="size-3.5 text-neutral-400" />,
         run: async () => {
           try {
-            await unwrap(window.gitApi.checkout(b.name));
+            await checkoutMut.mutateAsync(b.name);
             toast("success", `Switched to ${b.name}`);
-            await refreshAll();
           } catch (e) {
             toast("error", e instanceof Error ? e.message : String(e));
           }

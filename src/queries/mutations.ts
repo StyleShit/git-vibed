@@ -8,6 +8,7 @@ import {
   gitStashesOptions,
   gitStatusOptions,
   gitTagsOptions,
+  gitUndoOptions,
   gitWorktreesOptions,
 } from "./gitApi";
 
@@ -377,5 +378,103 @@ export function branchSetUpstreamMutation(
         gitBranchesOptions(path).queryKey,
         gitStatusOptions(path).queryKey,
       ]),
+  };
+}
+
+// --- History ops ---------------------------------------------------------
+
+// Anything that moves HEAD touches status, branches, log, undo, and
+// possibly worktrees (git stores per-worktree HEAD tips). One helper for
+// the full fan-out.
+function afterHeadMove(path: string) {
+  invalidate([
+    gitStatusOptions(path).queryKey,
+    gitBranchesOptions(path).queryKey,
+    gitLogOptions(path).queryKey,
+    gitUndoOptions(path).queryKey,
+    gitWorktreesOptions(path).queryKey,
+  ]);
+}
+
+export function checkoutMutation(
+  path: string,
+): UseMutationOptions<void, Error, string> {
+  return {
+    mutationFn: async (target) => {
+      await unwrap(window.gitApi.checkout(target));
+    },
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+interface CheckoutCreateInput {
+  name: string;
+  startPoint: string;
+}
+
+export function checkoutCreateMutation(
+  path: string,
+): UseMutationOptions<void, Error, CheckoutCreateInput> {
+  return {
+    mutationFn: async ({ name, startPoint }) => {
+      await unwrap(window.gitApi.checkoutCreate(name, startPoint));
+    },
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+export function cherryPickMutation(
+  path: string,
+): UseMutationOptions<void, Error, string> {
+  return {
+    mutationFn: async (hash) => {
+      await unwrap(window.gitApi.cherryPick(hash));
+    },
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+export function revertMutation(
+  path: string,
+): UseMutationOptions<void, Error, string> {
+  return {
+    mutationFn: async (hash) => {
+      await unwrap(window.gitApi.revert(hash));
+    },
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+interface ResetInput {
+  target: string;
+  mode: "soft" | "mixed" | "hard";
+}
+
+export function resetMutation(
+  path: string,
+): UseMutationOptions<void, Error, ResetInput> {
+  return {
+    mutationFn: async ({ target, mode }) => {
+      await unwrap(window.gitApi.reset(target, mode));
+    },
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+export function undoHeadMutation(
+  path: string,
+): UseMutationOptions<{ label: string | null }, Error, void> {
+  return {
+    mutationFn: async () => unwrap(window.gitApi.undoHead()),
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+export function redoHeadMutation(
+  path: string,
+): UseMutationOptions<{ label: string | null }, Error, void> {
+  return {
+    mutationFn: async () => unwrap(window.gitApi.redoHead()),
+    onSuccess: () => afterHeadMove(path),
   };
 }

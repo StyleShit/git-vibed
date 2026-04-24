@@ -12,6 +12,7 @@ import {
 import {
   branchDeleteMutation,
   branchRenameMutation,
+  checkoutMutation,
 } from "../../queries/mutations";
 import type { Branch } from "@shared/types";
 import { BranchContextMenu } from "./BranchContextMenu";
@@ -55,6 +56,7 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
   const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
   const branchRenameMut = useMutation(branchRenameMutation(activePath ?? ""));
   const branchDeleteMut = useMutation(branchDeleteMutation(activePath ?? ""));
+  const checkoutMut = useMutation(checkoutMutation(activePath ?? ""));
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);
@@ -110,9 +112,8 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
 
   async function checkout(name: string) {
     try {
-      await unwrap(window.gitApi.checkout(name));
+      await checkoutMut.mutateAsync(name);
       toast("success", `Switched to ${name}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }

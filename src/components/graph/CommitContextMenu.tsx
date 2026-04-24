@@ -1,9 +1,15 @@
 import { useMemo, useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
+import { useMutation } from "@tanstack/react-query";
 import type { Commit } from "@shared/types";
-import { useRepo } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
+import {
+  checkoutMutation,
+  cherryPickMutation,
+  resetMutation,
+  revertMutation,
+} from "../../queries/mutations";
 import { useConfirm } from "../ui/Confirm";
 import { TagCreateDialog } from "../tags/TagCreateDialog";
 
@@ -19,7 +25,11 @@ export function CommitContextMenu({
   onClose: () => void;
 }) {
   const toast = useUI((s) => s.toast);
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const activePath = useActiveTab()?.path ?? "";
+  const checkoutMut = useMutation(checkoutMutation(activePath));
+  const cherryPickMut = useMutation(cherryPickMutation(activePath));
+  const revertMut = useMutation(revertMutation(activePath));
+  const resetMut = useMutation(resetMutation(activePath));
   const confirmDialog = useConfirm();
   const [showTag, setShowTag] = useState(false);
 
@@ -33,9 +43,8 @@ export function CommitContextMenu({
 
   async function cherryPick() {
     try {
-      await unwrap(window.gitApi.cherryPick(commit.hash));
+      await cherryPickMut.mutateAsync(commit.hash);
       toast("success", `Cherry-picked ${commit.hash.slice(0, 7)}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -49,9 +58,8 @@ export function CommitContextMenu({
     });
     if (!ok) return;
     try {
-      await unwrap(window.gitApi.revert(commit.hash));
+      await revertMut.mutateAsync(commit.hash);
       toast("success", `Reverted ${commit.hash.slice(0, 7)}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -69,9 +77,8 @@ export function CommitContextMenu({
     });
     if (!ok) return;
     try {
-      await unwrap(window.gitApi.reset(commit.hash, mode));
+      await resetMut.mutateAsync({ target: commit.hash, mode });
       toast("success", `Reset (${mode})`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -79,9 +86,8 @@ export function CommitContextMenu({
 
   async function checkout() {
     try {
-      await unwrap(window.gitApi.checkout(commit.hash));
+      await checkoutMut.mutateAsync(commit.hash);
       toast("info", `Detached HEAD at ${commit.hash.slice(0, 7)}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }

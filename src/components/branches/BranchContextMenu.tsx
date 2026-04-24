@@ -15,6 +15,8 @@ import {
 import {
   branchDeleteMutation,
   branchSetUpstreamMutation,
+  checkoutMutation,
+  resetMutation,
 } from "../../queries/mutations";
 import { Prompt } from "../ui/Prompt";
 import { useConfirm } from "../ui/Confirm";
@@ -49,6 +51,8 @@ export function BranchContextMenu({
   const branchSetUpstreamMut = useMutation(
     branchSetUpstreamMutation(activePath ?? ""),
   );
+  const checkoutMut = useMutation(checkoutMutation(activePath ?? ""));
+  const resetMut = useMutation(resetMutation(activePath ?? ""));
   const prStateFilter = useSettings((s) => s.prStateFilter);
   const ghAvailable = useQuery(ghAvailableOptions(activePath)).data ?? false;
   const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
@@ -89,7 +93,7 @@ export function BranchContextMenu({
   }
 
   async function checkout() {
-    await run("Checkout", () => unwrap(window.gitApi.checkout(branch.name)), `Switched to ${branch.name}`);
+    await run("Checkout", () => checkoutMut.mutateAsync(branch.name), `Switched to ${branch.name}`);
   }
 
   async function pull() {
@@ -169,9 +173,8 @@ export function BranchContextMenu({
     });
     if (!ok) return;
     try {
-      await unwrap(window.gitApi.reset(branch.name, mode));
+      await resetMut.mutateAsync({ target: branch.name, mode });
       toast("success", `Reset to ${branch.name} (${mode})`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
