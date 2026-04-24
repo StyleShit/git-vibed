@@ -12,6 +12,9 @@ import {
 } from "../../queries/gitApi";
 import {
   checkoutMutation,
+  fetchMutation,
+  pullMutation,
+  pushMutation,
   redoHeadMutation,
   stashCreateMutation,
   stashPopMutation,
@@ -51,6 +54,9 @@ export function Toolbar() {
   const stashPopMut = useMutation(stashPopMutation(path ?? ""));
   const undoHeadMut = useMutation(undoHeadMutation(path ?? ""));
   const redoHeadMut = useMutation(redoHeadMutation(path ?? ""));
+  const pullMut = useMutation(pullMutation(path ?? ""));
+  const pushMut = useMutation(pushMutation(path ?? ""));
+  const fetchMut = useMutation(fetchMutation(path ?? ""));
   const toast = useUI((s) => s.toast);
   const setCommandPalette = useUI((s) => s.setCommandPalette);
   const view = useUI((s) => s.view);
@@ -73,9 +79,8 @@ export function Toolbar() {
     if (!currentBranch) return;
     setBusy("pull");
     try {
-      await unwrap(window.gitApi.pull({ strategy }));
+      await pullMut.mutateAsync({ strategy });
       toast("success", "Pulled");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {
@@ -98,16 +103,13 @@ export function Toolbar() {
     }
     setBusy("push");
     try {
-      await unwrap(
-        window.gitApi.push({
-          branch: currentBranch,
-          remote: status?.tracking?.split("/")[0],
-          setUpstream: !status?.tracking,
-          force,
-        }),
-      );
+      await pushMut.mutateAsync({
+        branch: currentBranch,
+        remote: status?.tracking?.split("/")[0],
+        setUpstream: !status?.tracking,
+        force,
+      });
       toast("success", force ? "Force-pushed" : "Pushed");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {
@@ -118,9 +120,8 @@ export function Toolbar() {
   async function runFetch() {
     setBusy("fetch");
     try {
-      await unwrap(window.gitApi.fetch({ all: true, prune: true }));
+      await fetchMut.mutateAsync({ all: true, prune: true });
       toast("success", "Fetched");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {

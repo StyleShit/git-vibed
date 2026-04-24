@@ -478,3 +478,72 @@ export function redoHeadMutation(
     onSuccess: () => afterHeadMove(path),
   };
 }
+
+// --- Remote sync (pull / push / fetch) -----------------------------------
+
+// Remote sync rarely changes what's staged, but it does shift HEAD + refs
+// and can update the tag namespace. Reuse afterHeadMove and add tags.
+function afterRemoteSync(path: string) {
+  invalidate([
+    gitStatusOptions(path).queryKey,
+    gitBranchesOptions(path).queryKey,
+    gitLogOptions(path).queryKey,
+    gitTagsOptions(path).queryKey,
+    gitUndoOptions(path).queryKey,
+  ]);
+}
+
+type PullOpts = import("@shared/types").PullOptions;
+type PushOpts = import("@shared/types").PushOptions;
+type FetchOpts = import("@shared/types").FetchOptions;
+
+export function pullMutation(
+  path: string,
+): UseMutationOptions<string, Error, PullOpts> {
+  return {
+    mutationFn: async (opts) => unwrap(window.gitApi.pull(opts)),
+    onSuccess: () => afterRemoteSync(path),
+  };
+}
+
+export function pushMutation(
+  path: string,
+): UseMutationOptions<string, Error, PushOpts> {
+  return {
+    mutationFn: async (opts) => unwrap(window.gitApi.push(opts)),
+    onSuccess: () => afterRemoteSync(path),
+  };
+}
+
+export function fetchMutation(
+  path: string,
+): UseMutationOptions<string, Error, FetchOpts> {
+  return {
+    mutationFn: async (opts) => unwrap(window.gitApi.fetch(opts)),
+    onSuccess: () => afterRemoteSync(path),
+  };
+}
+
+export function pullBranchMutation(
+  path: string,
+): UseMutationOptions<string, Error, string> {
+  return {
+    mutationFn: async (branch) => unwrap(window.gitApi.pullBranch(branch)),
+    onSuccess: () => afterRemoteSync(path),
+  };
+}
+
+interface PushBranchInput {
+  branch: string;
+  force?: boolean;
+}
+
+export function pushBranchMutation(
+  path: string,
+): UseMutationOptions<string, Error, PushBranchInput> {
+  return {
+    mutationFn: async ({ branch, force }) =>
+      unwrap(window.gitApi.pushBranch(branch, force)),
+    onSuccess: () => afterRemoteSync(path),
+  };
+}

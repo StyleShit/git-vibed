@@ -16,6 +16,8 @@ import {
   branchDeleteMutation,
   branchSetUpstreamMutation,
   checkoutMutation,
+  pullBranchMutation,
+  pushBranchMutation,
   resetMutation,
 } from "../../queries/mutations";
 import { Prompt } from "../ui/Prompt";
@@ -53,6 +55,8 @@ export function BranchContextMenu({
   );
   const checkoutMut = useMutation(checkoutMutation(activePath ?? ""));
   const resetMut = useMutation(resetMutation(activePath ?? ""));
+  const pullBranchMut = useMutation(pullBranchMutation(activePath ?? ""));
+  const pushBranchMut = useMutation(pushBranchMutation(activePath ?? ""));
   const prStateFilter = useSettings((s) => s.prStateFilter);
   const ghAvailable = useQuery(ghAvailableOptions(activePath)).data ?? false;
   const remotes = useQuery(gitRemotesOptions(activePath)).data ?? [];
@@ -97,7 +101,7 @@ export function BranchContextMenu({
   }
 
   async function pull() {
-    await run("Pull", () => unwrap(window.gitApi.pullBranch(branch.name)), `Pulled ${branch.name}`);
+    await run("Pull", () => pullBranchMut.mutateAsync(branch.name), `Pulled ${branch.name}`);
   }
 
   async function push(force = false) {
@@ -114,7 +118,7 @@ export function BranchContextMenu({
     }
     await run(
       force ? "Force push" : "Push",
-      () => unwrap(window.gitApi.pushBranch(branch.name, force)),
+      () => pushBranchMut.mutateAsync({ branch: branch.name, force }),
       force ? `Force-pushed ${branch.name}` : `Pushed ${branch.name}`,
     );
   }

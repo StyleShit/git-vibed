@@ -16,6 +16,9 @@ import {
 } from "../../queries/gitApi";
 import {
   checkoutMutation,
+  fetchMutation,
+  pullMutation,
+  pushMutation,
   stashApplyMutation,
   stashCreateMutation,
   stashPopMutation,
@@ -71,6 +74,9 @@ export function CommandPalette() {
   const stashPopMut = useMutation(stashPopMutation(activePath ?? ""));
   const stashApplyMut = useMutation(stashApplyMutation(activePath ?? ""));
   const checkoutMut = useMutation(checkoutMutation(activePath ?? ""));
+  const pullMut = useMutation(pullMutation(activePath ?? ""));
+  const pushMut = useMutation(pushMutation(activePath ?? ""));
+  const fetchMut = useMutation(fetchMutation(activePath ?? ""));
   const refreshAll = useRepo((s) => s.refreshAll);
   const openRepo = useRepo((s) => s.openRepo);
   const pullStrategy = useSettings((s) => s.defaultPullStrategy);
@@ -128,9 +134,8 @@ export function CommandPalette() {
       icon: <FetchIcon className="size-3.5 text-neutral-400" />,
       run: async () => {
         try {
-          await unwrap(window.gitApi.fetch({ all: true, prune: true }));
+          await fetchMut.mutateAsync({ all: true, prune: true });
           toast("success", "Fetched");
-          await refreshAll();
         } catch (e) {
           toast("error", e instanceof Error ? e.message : String(e));
         }
@@ -145,9 +150,8 @@ export function CommandPalette() {
         icon: <PullIcon className="size-3.5 text-neutral-400" />,
         run: async () => {
           try {
-            await unwrap(window.gitApi.pull({ strategy: pullStrategy }));
+            await pullMut.mutateAsync({ strategy: pullStrategy });
             toast("success", "Pulled");
-            await refreshAll();
           } catch (e) {
             toast("error", e instanceof Error ? e.message : String(e));
           }
@@ -161,15 +165,12 @@ export function CommandPalette() {
         icon: <PushIcon className="size-3.5 text-neutral-400" />,
         run: async () => {
           try {
-            await unwrap(
-              window.gitApi.push({
-                branch: status.branch!,
-                remote: status.tracking?.split("/")[0],
-                setUpstream: !status.tracking,
-              }),
-            );
+            await pushMut.mutateAsync({
+              branch: status.branch!,
+              remote: status.tracking?.split("/")[0],
+              setUpstream: !status.tracking,
+            });
             toast("success", "Pushed");
-            await refreshAll();
           } catch (e) {
             toast("error", e instanceof Error ? e.message : String(e));
           }

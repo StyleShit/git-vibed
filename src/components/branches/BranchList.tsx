@@ -13,6 +13,8 @@ import {
   branchDeleteMutation,
   branchRenameMutation,
   checkoutMutation,
+  fetchMutation,
+  pullBranchMutation,
 } from "../../queries/mutations";
 import type { Branch } from "@shared/types";
 import { BranchContextMenu } from "./BranchContextMenu";
@@ -57,6 +59,8 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
   const branchRenameMut = useMutation(branchRenameMutation(activePath ?? ""));
   const branchDeleteMut = useMutation(branchDeleteMutation(activePath ?? ""));
   const checkoutMut = useMutation(checkoutMutation(activePath ?? ""));
+  const pullBranchMut = useMutation(pullBranchMutation(activePath ?? ""));
+  const fetchMut = useMutation(fetchMutation(activePath ?? ""));
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);
@@ -134,9 +138,8 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
   async function pullBranch(name: string) {
     setPulling(name);
     try {
-      await unwrap(window.gitApi.pullBranch(name));
+      await pullBranchMut.mutateAsync(name);
       toast("success", `Pulled ${name}`);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {
@@ -171,7 +174,7 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
     const errors: string[] = [];
     for (const b of targets) {
       try {
-        await unwrap(window.gitApi.pullBranch(b.name));
+        await pullBranchMut.mutateAsync(b.name);
       } catch (e) {
         errors.push(`${b.name}: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -330,11 +333,8 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
             const name = folderMenu.path;
             setFolderMenu(null);
             try {
-              await unwrap(
-                window.gitApi.fetch({ remote: name, all: false, prune: true }),
-              );
+              await fetchMut.mutateAsync({ remote: name, all: false, prune: true });
               toast("success", `Fetched ${name}`);
-              await refreshAll();
             } catch (e) {
               toast("error", e instanceof Error ? e.message : String(e));
             }
