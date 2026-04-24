@@ -32,13 +32,19 @@ export function ConflictList() {
 
   // Opening the merge view with nothing selected is a dead-end — the
   // editor just shows "select a file on the left." Auto-pick the first
-  // conflict so the user lands straight in the resolver. Also falls
-  // through after a file is resolved and drops out of `conflicts` (if
-  // the current selection is gone, jump to the next remaining one).
+  // conflict so the user lands straight in the resolver.
+  //
+  // This is *only* for the empty-selection case. Advancing the
+  // selection after a resolve is MergeEditor's job (it computes the
+  // next file BEFORE the mutation so the hand-off is race-free). If we
+  // also reselected here when `selected` pointed at a resolved file,
+  // we'd race the query refetch: the old `conflicts` list — still
+  // containing the just-resolved file — would fire into this effect
+  // right after MergeEditor set selection to null, and we'd put the
+  // cursor back on the resolved file.
   useEffect(() => {
-    if (conflicts.length === 0) return;
-    const stillValid = selected && conflicts.some((f) => f.path === selected);
-    if (!stillValid) selectConflictFile(conflicts[0].path);
+    if (selected || conflicts.length === 0) return;
+    selectConflictFile(conflicts[0].path);
   }, [conflicts, selected, selectConflictFile]);
 
   async function finish() {

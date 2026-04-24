@@ -13,10 +13,17 @@ import {
   repoKey,
 } from "./gitApi";
 
-// Invalidate a list of query keys in one go. Helper because every
-// onSuccess invalidates one or more keys and the boilerplate adds up.
-function invalidate(keys: readonly (readonly unknown[])[]) {
-  for (const k of keys) queryClient.invalidateQueries({ queryKey: k });
+// Invalidate a list of query keys and wait for the refetches to land.
+// Returning the joined promise from a mutation's onSuccess makes
+// mutateAsync await the refetch — without that, callers that read from
+// the cache the moment mutateAsync resolves would race against an
+// in-flight refetch and read stale data (e.g. ConflictList re-selecting
+// a just-resolved file because its `conflicted` list hadn't refreshed
+// yet).
+function invalidate(keys: readonly (readonly unknown[])[]): Promise<void> {
+  return Promise.all(
+    keys.map((k) => queryClient.invalidateQueries({ queryKey: k })),
+  ).then(() => undefined);
 }
 
 // --- Staging -------------------------------------------------------------
@@ -106,7 +113,7 @@ function afterStashMutation(path: string) {
   // Every stash mutation moves both the WIP state (status) and the stash
   // list; stashPop/stashApply can also surface new WIP files from the
   // stash, which changes the working tree.
-  invalidate([
+  return invalidate([
     gitStatusOptions(path).queryKey,
     gitStashesOptions(path).queryKey,
     gitLogOptions(path).queryKey,
@@ -327,7 +334,7 @@ function afterBranchIdentityChange(path: string) {
   // Create / rename / delete / upstream all change the ref namespace.
   // Log can change (new branch tip, or a detached-head commit now lives
   // under a ref name); status includes the current branch name.
-  invalidate([
+  return invalidate([
     gitBranchesOptions(path).queryKey,
     gitLogOptions(path).queryKey,
     gitStatusOptions(path).queryKey,
@@ -388,7 +395,7 @@ export function branchSetUpstreamMutation(
 // possibly worktrees (git stores per-worktree HEAD tips). One helper for
 // the full fan-out.
 function afterHeadMove(path: string) {
-  invalidate([
+  return invalidate([
     gitStatusOptions(path).queryKey,
     gitBranchesOptions(path).queryKey,
     gitLogOptions(path).queryKey,
@@ -485,7 +492,7 @@ export function redoHeadMutation(
 // Remote sync rarely changes what's staged, but it does shift HEAD + refs
 // and can update the tag namespace. Reuse afterHeadMove and add tags.
 function afterRemoteSync(path: string) {
-  invalidate([
+  return invalidate([
     gitStatusOptions(path).queryKey,
     gitBranchesOptions(path).queryKey,
     gitLogOptions(path).queryKey,
@@ -677,7 +684,9 @@ type PullRequest = import("@shared/types").PullRequest;
 // PR mutations invalidate the entire prs bucket regardless of state
 // filter (github returns all buckets on refetch; simpler than scoping).
 function invalidatePRs(path: string) {
-  queryClient.invalidateQueries({ queryKey: [...repoKey(path), "prs"] });
+  return queryClient.invalidateQueries({
+    queryKey: [...repoKey(path), "prs"],
+  });
 }
 
 export function prCreateMutation(
@@ -703,10 +712,7 @@ export function prMergeMutation(
     },
     // PR merge lands commits on the base branch, which moves HEAD + refs
     // once the user pulls; invalidate remote sync keys too.
-    onSuccess: () => {
-      invalidatePRs(path);
-      afterRemoteSync(path);
-    },
+    onSuccess: () => Promise.all([invalidatePRs(path), afterRemoteSync(path)]),
   };
 }
 
