@@ -1,7 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useUI } from "../../stores/ui";
-import { useActiveTab, useRepo } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { gitStatusOptions } from "../../queries/gitApi";
+import {
+  mergeAbortMutation,
+  rebaseAbortMutation,
+} from "../../queries/mutations";
 import { BranchGraph } from "../graph/BranchGraph";
 import { RemotesPanel } from "../remotes/RemotesPanel";
 import { SettingsPanel } from "../settings/SettingsPanel";
@@ -10,7 +14,6 @@ import { MergeEditor } from "../merge/MergeEditor";
 import { ConflictList } from "../merge/ConflictList";
 import { Spinner } from "../ui/Spinner";
 import { useConfirm } from "../ui/Confirm";
-import { unwrap } from "../../lib/ipc";
 
 export function MainPanel() {
   const view = useUI((s) => s.view);
@@ -81,7 +84,9 @@ function ConflictBanner({
 }) {
   const setView = useUI((s) => s.setView);
   const toast = useUI((s) => s.toast);
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const activePath = useActiveTab()?.path;
+  const mergeAbortMut = useMutation(mergeAbortMutation(activePath ?? ""));
+  const rebaseAbortMut = useMutation(rebaseAbortMutation(activePath ?? ""));
   const confirmDialog = useConfirm();
 
   async function abort() {
@@ -93,10 +98,9 @@ function ConflictBanner({
     });
     if (!ok) return;
     try {
-      if (mode === "merge") await unwrap(window.gitApi.mergeAbort());
-      else await unwrap(window.gitApi.rebaseAbort());
+      if (mode === "merge") await mergeAbortMut.mutateAsync();
+      else await rebaseAbortMut.mutateAsync();
       toast("success", "Aborted");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }

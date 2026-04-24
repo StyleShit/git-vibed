@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog } from "../ui/Dialog";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 import { gitStatusOptions } from "../../queries/gitApi";
+import {
+  mergeMutation,
+  rebaseMutation,
+} from "../../queries/mutations";
 
 export function MergeRebaseDialog({
   kind,
@@ -17,7 +20,8 @@ export function MergeRebaseDialog({
 }) {
   const activePath = useActiveTab()?.path;
   const status = useQuery(gitStatusOptions(activePath)).data ?? null;
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const mergeMut = useMutation(mergeMutation(activePath ?? ""));
+  const rebaseMut = useMutation(rebaseMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);
   const [busy, setBusy] = useState(false);
@@ -27,15 +31,14 @@ export function MergeRebaseDialog({
     try {
       const result =
         kind === "merge"
-          ? await unwrap(window.gitApi.merge(source))
-          : await unwrap(window.gitApi.rebase(source));
+          ? await mergeMut.mutateAsync(source)
+          : await rebaseMut.mutateAsync(source);
       if (result.conflicts.length > 0) {
         toast("info", `Conflicts in ${result.conflicts.length} file(s)`);
         setView("merge");
       } else {
         toast("success", kind === "merge" ? "Merged" : "Rebased");
       }
-      await refreshAll();
       onClose();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));

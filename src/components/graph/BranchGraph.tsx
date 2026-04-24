@@ -13,6 +13,7 @@ import {
   branchRenameMutation,
   checkoutCreateMutation,
   checkoutMutation,
+  mergeMutation,
   resetMutation,
 } from "../../queries/mutations";
 import { useUI } from "../../stores/ui";
@@ -992,6 +993,7 @@ function RefBranchMenuHost({
   const refreshAll = useRepo((s) => s.refreshAll);
   const activePath = useActiveTab()?.path;
   const branchRenameMut = useMutation(branchRenameMutation(activePath ?? ""));
+  const mergeMut = useMutation(mergeMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);
 
@@ -1008,14 +1010,13 @@ function RefBranchMenuHost({
   async function runMerge(source: string) {
     setMenuOpen(false);
     try {
-      const result = await unwrap(window.gitApi.merge(source));
+      const result = await mergeMut.mutateAsync(source);
       if (result.conflicts.length > 0) {
         toast("info", `Conflicts in ${result.conflicts.length} file(s)`);
         setView("merge");
       } else {
         toast("success", `Merged ${source}`);
       }
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }

@@ -14,6 +14,7 @@ import {
   branchRenameMutation,
   checkoutMutation,
   fetchMutation,
+  mergeMutation,
   pullBranchMutation,
 } from "../../queries/mutations";
 import type { Branch } from "@shared/types";
@@ -61,6 +62,7 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
   const checkoutMut = useMutation(checkoutMutation(activePath ?? ""));
   const pullBranchMut = useMutation(pullBranchMutation(activePath ?? ""));
   const fetchMut = useMutation(fetchMutation(activePath ?? ""));
+  const mergeMut = useMutation(mergeMutation(activePath ?? ""));
   const refreshAll = useRepo((s) => s.refreshAll);
   const toast = useUI((s) => s.toast);
   const setView = useUI((s) => s.setView);
@@ -279,14 +281,13 @@ export const BranchList = forwardRef<BranchListHandle, Props>(function BranchLis
           onMerge={async (src) => {
             setMenu(null);
             try {
-              const result = await unwrap(window.gitApi.merge(src));
+              const result = await mergeMut.mutateAsync(src);
               if (result.conflicts.length > 0) {
                 toast("info", `Conflicts in ${result.conflicts.length} file(s)`);
                 setView("merge");
               } else {
                 toast("success", `Merged ${src}`);
               }
-              await refreshAll();
             } catch (e) {
               toast("error", e instanceof Error ? e.message : String(e));
             }

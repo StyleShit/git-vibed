@@ -1,16 +1,24 @@
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
-import { unwrap } from "../../lib/ipc";
 import { gitStatusOptions } from "../../queries/gitApi";
+import {
+  mergeAbortMutation,
+  rebaseAbortMutation,
+  rebaseContinueMutation,
+  rebaseSkipMutation,
+} from "../../queries/mutations";
 import { useConfirm } from "../ui/Confirm";
 import { CheckIcon, CloseIcon } from "../ui/Icons";
 
 export function ConflictList() {
   const activePath = useActiveTab()?.path;
   const status = useQuery(gitStatusOptions(activePath)).data ?? null;
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const rebaseContinueMut = useMutation(rebaseContinueMutation(activePath ?? ""));
+  const rebaseAbortMut = useMutation(rebaseAbortMutation(activePath ?? ""));
+  const rebaseSkipMut = useMutation(rebaseSkipMutation(activePath ?? ""));
+  const mergeAbortMut = useMutation(mergeAbortMutation(activePath ?? ""));
   const selected = useUI((s) => s.selectedConflictFile);
   const selectConflictFile = useUI((s) => s.selectConflictFile);
   const setView = useUI((s) => s.setView);
@@ -49,9 +57,8 @@ export function ConflictList() {
         ui.selectStashFile(null);
         setView("graph");
       } else if (isRebase) {
-        await unwrap(window.gitApi.rebaseContinue());
+        await rebaseContinueMut.mutateAsync();
         toast("success", "Rebase continued");
-        await refreshAll();
       }
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
@@ -67,12 +74,11 @@ export function ConflictList() {
     });
     if (!ok) return;
     try {
-      if (isMerge) await unwrap(window.gitApi.mergeAbort());
-      else if (isRebase) await unwrap(window.gitApi.rebaseAbort());
+      if (isMerge) await mergeAbortMut.mutateAsync();
+      else if (isRebase) await rebaseAbortMut.mutateAsync();
       toast("success", "Aborted");
       selectConflictFile(null);
       setView("graph");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }
@@ -80,9 +86,8 @@ export function ConflictList() {
 
   async function skip() {
     try {
-      await unwrap(window.gitApi.rebaseSkip());
+      await rebaseSkipMut.mutateAsync();
       toast("success", "Skipped");
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     }

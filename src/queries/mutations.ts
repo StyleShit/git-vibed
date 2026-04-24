@@ -547,3 +547,121 @@ export function pushBranchMutation(
     onSuccess: () => afterRemoteSync(path),
   };
 }
+
+// --- Commit + merge / rebase --------------------------------------------
+
+type CommitOpts = import("@shared/types").CommitOptions;
+
+export function commitMutation(
+  path: string,
+): UseMutationOptions<string, Error, CommitOpts> {
+  return {
+    mutationFn: async (opts) => unwrap(window.gitApi.commit(opts)),
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+type ConflictsResult = { conflicts: string[] };
+
+export function mergeMutation(
+  path: string,
+): UseMutationOptions<ConflictsResult, Error, string> {
+  return {
+    mutationFn: async (branch) => unwrap(window.gitApi.merge(branch)),
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+export function rebaseMutation(
+  path: string,
+): UseMutationOptions<ConflictsResult, Error, string> {
+  return {
+    mutationFn: async (onto) => unwrap(window.gitApi.rebase(onto)),
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+export function rebaseContinueMutation(
+  path: string,
+): UseMutationOptions<ConflictsResult, Error, void> {
+  return {
+    mutationFn: async () => unwrap(window.gitApi.rebaseContinue()),
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+export function rebaseAbortMutation(
+  path: string,
+): UseMutationOptions<void, Error, void> {
+  return {
+    mutationFn: async () => {
+      await unwrap(window.gitApi.rebaseAbort());
+    },
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+export function rebaseSkipMutation(
+  path: string,
+): UseMutationOptions<ConflictsResult, Error, void> {
+  return {
+    mutationFn: async () => unwrap(window.gitApi.rebaseSkip()),
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+export function mergeAbortMutation(
+  path: string,
+): UseMutationOptions<void, Error, void> {
+  return {
+    mutationFn: async () => {
+      await unwrap(window.gitApi.mergeAbort());
+    },
+    onSuccess: () => afterHeadMove(path),
+  };
+}
+
+// --- Merge-editor resolution helpers ------------------------------------
+
+interface WriteFileInput {
+  path: string;
+  content: string;
+}
+
+export function writeFileMutation(
+  path: string,
+): UseMutationOptions<void, Error, WriteFileInput> {
+  return {
+    mutationFn: async ({ path: filePath, content }) => {
+      await unwrap(window.gitApi.writeFile(filePath, content));
+    },
+    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+  };
+}
+
+interface ResolveWithSideInput {
+  filePath: string;
+  side: "ours" | "theirs";
+}
+
+export function resolveWithSideMutation(
+  path: string,
+): UseMutationOptions<void, Error, ResolveWithSideInput> {
+  return {
+    mutationFn: async ({ filePath, side }) => {
+      await unwrap(window.gitApi.resolveWithSide(filePath, side));
+    },
+    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+  };
+}
+
+export function resolveWithDeleteMutation(
+  path: string,
+): UseMutationOptions<void, Error, string> {
+  return {
+    mutationFn: async (filePath) => {
+      await unwrap(window.gitApi.resolveWithDelete(filePath));
+    },
+    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+  };
+}

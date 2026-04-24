@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useRepo, useActiveTab } from "../../stores/repo";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
-import { unwrap } from "../../lib/ipc";
 import { gitStatusOptions } from "../../queries/gitApi";
+import { commitMutation } from "../../queries/mutations";
 
 export function CommitPanel() {
   const activePath = useActiveTab()?.path;
   const status = useQuery(gitStatusOptions(activePath)).data ?? null;
-  const refreshAll = useRepo((s) => s.refreshAll);
+  const commitMut = useMutation(commitMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const skipHooksDefault = useSettings((s) => s.skipHooksByDefault);
   const setSkipHooksDefault = useSettings((s) => s.setSkipHooksByDefault);
@@ -140,13 +140,11 @@ export function CommitPanel() {
     if (!canCommit) return;
     setBusy(true);
     try {
-      await unwrap(
-        window.gitApi.commit({
-          message: fullMessage,
-          amend,
-          noVerify: skipHooks,
-        }),
-      );
+      await commitMut.mutateAsync({
+        message: fullMessage,
+        amend,
+        noVerify: skipHooks,
+      });
       toast(
         "success",
         mergeInProgress ? "Merge completed" : amend ? "Commit amended" : "Committed",
@@ -154,7 +152,6 @@ export function CommitPanel() {
       setSubject("");
       setDescription("");
       setAmend(false);
-      await refreshAll();
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
     } finally {

@@ -2,9 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Editor, { DiffEditor, type Monaco } from "@monaco-editor/react";
 import type * as monacoNs from "monaco-editor";
 import { useUI } from "../../stores/ui";
-import { useQuery } from "@tanstack/react-query";
-import { useActiveTab, useRepo } from "../../stores/repo";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useActiveTab } from "../../stores/repo";
 import { gitStatusOptions } from "../../queries/gitApi";
+import {
+  markResolvedMutation,
+  resolveWithDeleteMutation,
+  resolveWithSideMutation,
+  writeFileMutation,
+} from "../../queries/mutations";
 import { unwrap } from "../../lib/ipc";
 import {
   threeWayMerge,
@@ -60,9 +66,16 @@ export function MergeEditor() {
   const selectConflictFile = useUI((s) => s.selectConflictFile);
   const setView = useUI((s) => s.setView);
   const toast = useUI((s) => s.toast);
-  const refreshAll = useRepo((s) => s.refreshAll);
   const confirmDialog = useConfirm();
   const activePath = useActiveTab()?.path;
+  const writeFileMut = useMutation(writeFileMutation(activePath ?? ""));
+  const markResolvedMut = useMutation(markResolvedMutation(activePath ?? ""));
+  const resolveWithSideMut = useMutation(
+    resolveWithSideMutation(activePath ?? ""),
+  );
+  const resolveWithDeleteMut = useMutation(
+    resolveWithDeleteMutation(activePath ?? ""),
+  );
   const status = useQuery(gitStatusOptions(activePath)).data ?? null;
   const oursBranch = status?.branch ?? "ours";
   const theirsBranch = status?.incomingBranch ?? "theirs";
@@ -491,10 +504,9 @@ export function MergeEditor() {
         ? conflicted[currentIdx + 1].path
         : null;
 
-      await unwrap(window.gitApi.writeFile(file, result));
-      await unwrap(window.gitApi.markResolved([file]));
+      await writeFileMut.mutateAsync({ path: file, content: result });
+      await markResolvedMut.mutateAsync([file]);
       toast("success", "Marked resolved");
-      await refreshAll();
       // Advance to the next conflicted file; clear when none left so the
       // stale editor for a now-resolved file doesn't linger.
       selectConflictFile(nextFile);
@@ -588,14 +600,13 @@ export function MergeEditor() {
           ? conflicted[currentIdx + 1].path
           : null;
       if (choice === "keep-ours") {
-        await unwrap(window.gitApi.resolveWithSide(file, "ours"));
+        await resolveWithSideMut.mutateAsync({ filePath: file, side: "ours" });
       } else if (choice === "keep-theirs") {
-        await unwrap(window.gitApi.resolveWithSide(file, "theirs"));
+        await resolveWithSideMut.mutateAsync({ filePath: file, side: "theirs" });
       } else {
-        await unwrap(window.gitApi.resolveWithDelete(file));
+        await resolveWithDeleteMut.mutateAsync(file);
       }
       toast("success", "Resolved");
-      await refreshAll();
       // Always move the selection off the resolved file — either onto the
       // next conflict or to nothing. Without this the resolution panel
       // keeps rendering for a path that's no longer in `conflicted`.
