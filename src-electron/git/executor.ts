@@ -85,10 +85,25 @@ export class GitExecutor {
       status: mapIndexStatus(s.files.find((f) => f.path === p)?.index),
       staged: true,
     }));
+    // simple-git puts pure renames into `s.renamed` (as { from, to })
+    // instead of `s.staged`, so they'd be invisible to the staging UI
+    // without this fold-in. Rename + content edit shows up in BOTH lists,
+    // so dedupe by destination path.
+    const stagedPaths = new Set(staged.map((f) => f.path));
+    for (const r of s.renamed) {
+      if (stagedPaths.has(r.to)) continue;
+      staged.push({
+        path: r.to,
+        oldPath: r.from,
+        status: "renamed",
+        staged: true,
+      });
+      stagedPaths.add(r.to);
+    }
 
     const unstaged: FileChange[] = [];
     for (const f of s.files) {
-      const inStaged = s.staged.includes(f.path);
+      const inStaged = stagedPaths.has(f.path);
       const isUntracked = s.not_added.includes(f.path);
       const isConflicted = s.conflicted.includes(f.path);
       if (isConflicted) continue;
