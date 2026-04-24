@@ -617,6 +617,42 @@ export function MergeEditor() {
   }
 
   if (!file) {
+    const mergeOrRebase = !!status?.mergeInProgress || !!status?.rebaseInProgress;
+    const stagedFiles = status?.staged ?? [];
+    if (mergeOrRebase && stagedFiles.length > 0) {
+      return (
+        <div className="flex h-full min-w-0 flex-1 flex-col">
+          <div className="border-b border-neutral-800 px-4 py-3 text-xs uppercase tracking-wider text-neutral-500">
+            All conflicts resolved · {stagedFiles.length} file
+            {stagedFiles.length === 1 ? "" : "s"} ready to commit
+          </div>
+          <ul className="min-h-0 flex-1 overflow-y-auto py-1 text-sm">
+            {stagedFiles.map((f) => (
+              <li
+                key={f.path}
+                className="flex items-center gap-2 px-4 py-1 text-neutral-200"
+                title={f.path}
+              >
+                <span className="mono w-4 shrink-0 text-center text-xs text-neutral-500">
+                  {f.status === "added"
+                    ? "A"
+                    : f.status === "deleted"
+                      ? "D"
+                      : f.status === "renamed"
+                        ? "R"
+                        : "M"}
+                </span>
+                <span className="truncate">{f.path}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="border-t border-neutral-800 px-4 py-2 text-[11px] text-neutral-500">
+            Click <span className="text-neutral-300">Continue merge</span> on
+            the left to commit.
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex h-full flex-1 items-center justify-center text-sm text-neutral-500">
         Select a conflicted file on the left
