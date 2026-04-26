@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.node.json && vite build && electron-builder",
+    "build": "tsc -p tsconfig.node.json && vite build && electron-builder --publish never",
     "build:unpack": "tsc -p tsconfig.node.json && vite build && electron-builder --dir",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "lint": "tsc --noEmit",
@@ -80,7 +80,8 @@
         "deb"
       ],
       "category": "Development",
-      "icon": "public/logo.png"
+      "icon": "public/logo.png",
+      "maintainer": "StyleShit <32631382+StyleShit@users.noreply.github.com>"
     }
   },
   "engines": {
