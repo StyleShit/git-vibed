@@ -48,7 +48,7 @@ const gitApi = {
   setAutoFetchInterval: (ms: number) =>
     invoke<number>(GIT.SET_AUTO_FETCH_INTERVAL, ms),
 
-  status: () => invoke<RepoStatus>(GIT.STATUS),
+  status: (repoPath: string) => invoke<RepoStatus>(GIT.STATUS, repoPath),
   commit: (opts: CommitOptions) => invoke<string>(GIT.COMMIT, opts),
   stage: (files: string[]) => invoke<void>(GIT.STAGE, files),
   unstage: (files: string[]) => invoke<void>(GIT.UNSTAGE, files),
@@ -61,8 +61,9 @@ const gitApi = {
   diff: (file: string, opts?: { staged?: boolean; commitA?: string; commitB?: string }) =>
     invoke<FileDiff>(GIT.DIFF, { file, ...opts }),
 
-  log: (opts?: LogOptions) => invoke<Commit[]>(GIT.LOG, opts),
-  branches: () => invoke<Branch[]>(GIT.BRANCHES),
+  log: (repoPath: string, opts?: LogOptions) =>
+    invoke<Commit[]>(GIT.LOG, repoPath, opts),
+  branches: (repoPath: string) => invoke<Branch[]>(GIT.BRANCHES, repoPath),
   branchCreate: (name: string, base?: string) =>
     invoke<void>(GIT.BRANCH_CREATE, { name, base }),
   branchDelete: (name: string, force?: boolean) =>
@@ -95,7 +96,7 @@ const gitApi = {
   pushBranch: (branch: string, force?: boolean) =>
     invoke<string>(GIT.PUSH_BRANCH, { branch, force }),
 
-  remotes: () => invoke<Remote[]>(GIT.REMOTES),
+  remotes: (repoPath: string) => invoke<Remote[]>(GIT.REMOTES, repoPath),
   remoteAdd: (name: string, url: string) => invoke<void>(GIT.REMOTE_ADD, { name, url }),
   remoteRemove: (name: string) => invoke<void>(GIT.REMOTE_REMOVE, name),
   remoteSetUrl: (name: string, url: string, push?: boolean) =>
@@ -129,19 +130,20 @@ const gitApi = {
   findRenameTarget: (filePath: string, side: "ours" | "theirs") =>
     invoke<string | null>(GIT.FIND_RENAME_TARGET, { path: filePath, side }),
 
-  stashList: () => invoke<Stash[]>(GIT.STASH_LIST),
+  stashList: (repoPath: string) => invoke<Stash[]>(GIT.STASH_LIST, repoPath),
   stashApply: (index: number) => invoke<void>(GIT.STASH_APPLY, index),
   stashDrop: (index: number) => invoke<void>(GIT.STASH_DROP, index),
   stashShow: (index: number) => invoke<string>(GIT.STASH_SHOW, index),
   stashShowFiles: (index: number) =>
     invoke<FileDiff[]>(GIT.STASH_SHOW_FILES, index),
 
-  tags: () => invoke<Tag[]>(GIT.TAGS),
+  tags: (repoPath: string) => invoke<Tag[]>(GIT.TAGS, repoPath),
   tagCreate: (name: string, ref: string, message?: string) =>
     invoke<void>(GIT.TAG_CREATE, { name, ref, message }),
   tagDelete: (name: string) => invoke<void>(GIT.TAG_DELETE, name),
 
-  worktreeList: () => invoke<Worktree[]>(GIT.WORKTREE_LIST),
+  worktreeList: (repoPath: string) =>
+    invoke<Worktree[]>(GIT.WORKTREE_LIST, repoPath),
   worktreeAdd: (path: string, branch: string, createBranch?: boolean) =>
     invoke<void>(GIT.WORKTREE_ADD, { path, branch, createBranch }),
   worktreeRemove: (path: string, force?: boolean) =>
@@ -154,7 +156,7 @@ const gitApi = {
 
   undoHead: () => invoke<{ label: string | null }>(GIT.UNDO_HEAD),
   redoHead: () => invoke<{ label: string | null }>(GIT.REDO_HEAD),
-  undoState: () => invoke<UndoState>(GIT.UNDO_STATE),
+  undoState: (repoPath: string) => invoke<UndoState>(GIT.UNDO_STATE, repoPath),
 
   onRepoChanged: (cb: (e: RepoChangedEvent) => void) => {
     const handler = (_: unknown, payload: RepoChangedEvent) => cb(payload);

@@ -22,9 +22,12 @@ function wrap<T>(fn: () => Promise<T>): Promise<Result<T>> {
 }
 
 // Pulling the executor out once per handler keeps the call sites readable.
-// Every handler routes through the active session — tab switches update the
-// active key before the next request fires.
-const exec = (repo: RepoManager) => repo.require().executor;
+// Read handlers that take a repoPath route by path so concurrent
+// queries from different tabs can't race the active-session pointer.
+// Mutations + handlers without a path still fall back to the active
+// session.
+const exec = (repo: RepoManager, repoPath?: string) =>
+  repo.require(repoPath).executor;
 
 export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   ipc.handle(GIT.OPEN_REPO, (_e, repoPath: string) => wrap(() => repo.open(repoPath)));
@@ -40,7 +43,9 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
     wrap(async () => repo.activePath),
   );
 
-  ipc.handle(GIT.STATUS, () => wrap(() => exec(repo).status()));
+  ipc.handle(GIT.STATUS, (_e, repoPath: string) =>
+    wrap(() => exec(repo, repoPath).status()),
+  );
 
   ipc.handle(GIT.COMMIT, (_e, opts: CommitOptions) => wrap(() => exec(repo).commit(opts)));
 
@@ -79,9 +84,13 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
       }),
   );
 
-  ipc.handle(GIT.LOG, (_e, opts: LogOptions = {}) => wrap(() => exec(repo).log(opts)));
+  ipc.handle(GIT.LOG, (_e, repoPath: string, opts: LogOptions = {}) =>
+    wrap(() => exec(repo, repoPath).log(opts)),
+  );
 
-  ipc.handle(GIT.BRANCHES, () => wrap(() => exec(repo).branches()));
+  ipc.handle(GIT.BRANCHES, (_e, repoPath: string) =>
+    wrap(() => exec(repo, repoPath).branches()),
+  );
   ipc.handle(GIT.BRANCH_CREATE, (_e, { name, base }: { name: string; base?: string }) =>
     wrap(() => exec(repo).branchCreate(name, base)),
   );
@@ -144,7 +153,9 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
       wrap(() => exec(repo).pushBranch(branch, force)),
   );
 
-  ipc.handle(GIT.REMOTES, () => wrap(() => exec(repo).remotes()));
+  ipc.handle(GIT.REMOTES, (_e, repoPath: string) =>
+    wrap(() => exec(repo, repoPath).remotes()),
+  );
   ipc.handle(GIT.REMOTE_ADD, (_e, { name, url }: { name: string; url: string }) =>
     wrap(() => exec(repo).remoteAdd(name, url)),
   );
@@ -193,7 +204,9 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
       wrap(() => exec(repo).findRenameTarget(p, side)),
   );
 
-  ipc.handle(GIT.STASH_LIST, () => wrap(() => exec(repo).stashList()));
+  ipc.handle(GIT.STASH_LIST, (_e, repoPath: string) =>
+    wrap(() => exec(repo, repoPath).stashList()),
+  );
   ipc.handle(GIT.STASH_APPLY, (_e, index: number) => wrap(() => exec(repo).stashApply(index)));
   ipc.handle(GIT.STASH_DROP, (_e, index: number) => wrap(() => exec(repo).stashDrop(index)));
   ipc.handle(GIT.STASH_SHOW, (_e, index: number) => wrap(() => exec(repo).stashShow(index)));
@@ -201,7 +214,9 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
     wrap(() => exec(repo).stashShowFiles(index)),
   );
 
-  ipc.handle(GIT.TAGS, () => wrap(() => exec(repo).tags()));
+  ipc.handle(GIT.TAGS, (_e, repoPath: string) =>
+    wrap(() => exec(repo, repoPath).tags()),
+  );
   ipc.handle(
     GIT.TAG_CREATE,
     (_e, { name, ref, message }: { name: string; ref: string; message?: string }) =>
@@ -209,7 +224,9 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   );
   ipc.handle(GIT.TAG_DELETE, (_e, name: string) => wrap(() => exec(repo).tagDelete(name)));
 
-  ipc.handle(GIT.WORKTREE_LIST, () => wrap(() => exec(repo).worktrees()));
+  ipc.handle(GIT.WORKTREE_LIST, (_e, repoPath: string) =>
+    wrap(() => exec(repo, repoPath).worktrees()),
+  );
   ipc.handle(
     GIT.WORKTREE_ADD,
     (
@@ -235,10 +252,10 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
 
   ipc.handle(GIT.UNDO_HEAD, () => wrap(() => repo.require().headUndo()));
   ipc.handle(GIT.REDO_HEAD, () => wrap(() => repo.require().headRedo()));
-  ipc.handle(GIT.UNDO_STATE, () =>
+  ipc.handle(GIT.UNDO_STATE, (_e, repoPath: string) =>
     wrap(async () => {
       try {
-        return await repo.require().undoState();
+        return await repo.require(repoPath).undoState();
       } catch {
         // No active repo yet (e.g. called on startup before a tab is
         // open). Return a neutral state instead of surfacing the error.

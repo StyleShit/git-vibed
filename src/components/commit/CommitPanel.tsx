@@ -62,7 +62,10 @@ export function CommitPanel() {
           prevSubject = first ?? "";
           prevDescription = rest.join("\n\n");
         } else {
-          const res = await window.gitApi.log({ limit: 1, all: false });
+          const res = await window.gitApi.log(activePath ?? "", {
+            limit: 1,
+            all: false,
+          });
           if (res.ok && res.data[0]) {
             prevSubject = res.data[0].subject;
             prevDescription = res.data[0].body ?? "";

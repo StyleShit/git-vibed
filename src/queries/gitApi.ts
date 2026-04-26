@@ -21,9 +21,10 @@ type MaybePath = string | null | undefined;
 export const LOG_PAGE_SIZE = 500;
 
 export function gitStatusOptions(path: MaybePath) {
+  const p = path ?? "";
   return queryOptions({
-    queryKey: [...repoKey(path ?? ""), "status"] as const,
-    queryFn: () => unwrap(window.gitApi.status()),
+    queryKey: [...repoKey(p), "status"] as const,
+    queryFn: () => unwrap(window.gitApi.status(p)),
     enabled: !!path,
     staleTime: 0,
     gcTime: 5 * 60_000,
@@ -37,9 +38,10 @@ export function gitStatusOptions(path: MaybePath) {
 }
 
 export function gitBranchesOptions(path: MaybePath) {
+  const p = path ?? "";
   return queryOptions({
-    queryKey: [...repoKey(path ?? ""), "branches"] as const,
-    queryFn: () => unwrap(window.gitApi.branches()),
+    queryKey: [...repoKey(p), "branches"] as const,
+    queryFn: () => unwrap(window.gitApi.branches(p)),
     enabled: !!path,
     staleTime: 30_000,
     gcTime: 5 * 60_000,
@@ -47,11 +49,12 @@ export function gitBranchesOptions(path: MaybePath) {
 }
 
 export function gitLogOptions(path: MaybePath) {
+  const p = path ?? "";
   return infiniteQueryOptions({
-    queryKey: [...repoKey(path ?? ""), "log"] as const,
+    queryKey: [...repoKey(p), "log"] as const,
     queryFn: ({ pageParam }) =>
       unwrap(
-        window.gitApi.log({
+        window.gitApi.log(p, {
           all: true,
           limit: LOG_PAGE_SIZE,
           skip: pageParam,
@@ -69,9 +72,10 @@ export function gitLogOptions(path: MaybePath) {
 }
 
 export function gitRemotesOptions(path: MaybePath) {
+  const p = path ?? "";
   return queryOptions({
-    queryKey: [...repoKey(path ?? ""), "remotes"] as const,
-    queryFn: () => unwrap(window.gitApi.remotes()),
+    queryKey: [...repoKey(p), "remotes"] as const,
+    queryFn: () => unwrap(window.gitApi.remotes(p)),
     enabled: !!path,
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,
@@ -79,9 +83,10 @@ export function gitRemotesOptions(path: MaybePath) {
 }
 
 export function gitStashesOptions(path: MaybePath) {
+  const p = path ?? "";
   return queryOptions({
-    queryKey: [...repoKey(path ?? ""), "stashes"] as const,
-    queryFn: () => unwrap(window.gitApi.stashList()),
+    queryKey: [...repoKey(p), "stashes"] as const,
+    queryFn: () => unwrap(window.gitApi.stashList(p)),
     enabled: !!path,
     staleTime: 30_000,
     gcTime: 5 * 60_000,
@@ -89,9 +94,10 @@ export function gitStashesOptions(path: MaybePath) {
 }
 
 export function gitTagsOptions(path: MaybePath) {
+  const p = path ?? "";
   return queryOptions({
-    queryKey: [...repoKey(path ?? ""), "tags"] as const,
-    queryFn: () => unwrap(window.gitApi.tags()),
+    queryKey: [...repoKey(p), "tags"] as const,
+    queryFn: () => unwrap(window.gitApi.tags(p)),
     enabled: !!path,
     staleTime: 60_000,
     gcTime: 5 * 60_000,
@@ -99,9 +105,10 @@ export function gitTagsOptions(path: MaybePath) {
 }
 
 export function gitWorktreesOptions(path: MaybePath) {
+  const p = path ?? "";
   return queryOptions({
-    queryKey: [...repoKey(path ?? ""), "worktrees"] as const,
-    queryFn: () => unwrap(window.gitApi.worktreeList()),
+    queryKey: [...repoKey(p), "worktrees"] as const,
+    queryFn: () => unwrap(window.gitApi.worktreeList(p)),
     enabled: !!path,
     staleTime: 60_000,
     gcTime: 5 * 60_000,
@@ -109,9 +116,10 @@ export function gitWorktreesOptions(path: MaybePath) {
 }
 
 export function gitUndoOptions(path: MaybePath) {
+  const p = path ?? "";
   return queryOptions({
-    queryKey: [...repoKey(path ?? ""), "undo"] as const,
-    queryFn: () => unwrap(window.gitApi.undoState()),
+    queryKey: [...repoKey(p), "undo"] as const,
+    queryFn: () => unwrap(window.gitApi.undoState(p)),
     enabled: !!path,
     staleTime: 0,
     gcTime: 5 * 60_000,
