@@ -23,7 +23,7 @@ The tab-switch race fix (`8df7b67`) plumbed `repoPath` through eight read IPCs (
 - `gitApi.conflictKind` / `fileAtRef` / `findRenameTarget` (`MergeEditor`)
 - `gitApi.stashShow` / `stashShowFiles` (`StashDetail`, `StashFileDiff`)
 - `gitApi.commitFiles` (`CommitDetail`)
-- `gitApi.diff` (`DiffViewer`, `WipFileDiff`, `CommitFileDiff`)
+- `gitApi.diff` (`WipFileDiff`, `CommitFileDiff`)
 - `gitApi.configList` / `configGet` (`SettingsPanel`)
 
 Mutations remain deferred — they run after `setActiveRepo` has flipped main's active key, so the race doesn't hit them. The unchanged write IPCs (`writeFile`, `resolveWithSide`, `resolveWithDelete`, `configSet`, etc.) still route through the active session.
@@ -46,7 +46,7 @@ The four detail-view reads now live in `src/queries/gitApi.ts` and call sites us
 | Factory | queryKey | staleTime | Caller |
 | --- | --- | --- | --- |
 | `commitFilesOptions(path, hash)` | `["repo", path, "commit-files", hash]` | `Infinity` | `CommitDetail.tsx` |
-| `wipDiffOptions(path, file, staged)` | `["repo", path, "diff", "wip", file, staged]` | `0` | `WipFileDiff.tsx`, `DiffViewer.tsx` |
+| `wipDiffOptions(path, file, staged)` | `["repo", path, "diff", "wip", file, staged]` | `0` | `WipFileDiff.tsx` |
 | `commitDiffOptions(path, hash, file)` | `["repo", path, "diff", "commit", hash, file]` | `Infinity` | `CommitFileDiff.tsx` |
 | `stashFilesOptions(path, index)` | `["repo", path, "stash-files", index]` | `Infinity` | `StashDetail.tsx`, `StashFileDiff.tsx` |
 

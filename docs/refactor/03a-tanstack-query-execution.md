@@ -102,7 +102,6 @@ export function invalidateKeys(qc: QueryClient, path: string, kinds: QueryKind[]
 | `ChangesPanel:114` | `stage(paths)` | `status` |
 | `ChangesPanel:119` | `unstage(paths)` | `status` |
 | `StagingArea:22,31,47` | `stage / unstage / discard` | `status` |
-| `DiffViewer:52,53,79,80` | `stagePatch / unstagePatch` | `status` |
 | `WipFileDiff:144,147,167,191,194,225` | `stagePatch / unstagePatch / discardPatch` | `status` |
 | `ChangesPanel:131` | `discard(paths)` | `status` |
 
@@ -307,7 +306,7 @@ Suggested order (smallest blast radius first):
 
 ### Step D — Convert mutations (one domain per PR)
 Domains, in order of increasing blast radius:
-1. **Staging** — ChangesPanel, StagingArea, DiffViewer, WipFileDiff.
+1. **Staging** — ChangesPanel, StagingArea, WipFileDiff.
 2. **Stashes** — StashList, StashDetail, StashContextMenu + toolbar stash buttons.
 3. **Tags** — TagCreateDialog, TagList.
 4. **Remotes** — RemotesPanel, AddRemoteDialog, EditRemoteDialog.
@@ -364,7 +363,7 @@ Three read-only detail fetches currently live as local `useEffect + useState` pa
 | Hook | queryKey | queryFn | staleTime | Callers |
 | --- | --- | --- | --- | --- |
 | `useCommitFiles(path, hash)` | `["repo", path, "commit-files", hash]` | `unwrap(gitApi.commitFiles(hash))` | `Infinity` | `CommitDetail.tsx` |
-| `useWipDiff(path, args)` | `["repo", path, "diff", "wip", args]` | `unwrap(gitApi.diff(args))` | `0` | `WipFileDiff.tsx`, `DiffViewer.tsx` — WIP: invalidated by `status` watcher events. |
+| `useWipDiff(path, args)` | `["repo", path, "diff", "wip", args]` | `unwrap(gitApi.diff(args))` | `0` | `WipFileDiff.tsx` — WIP: invalidated by `status` watcher events. |
 | `useCommitDiff(path, args)` | `["repo", path, "diff", "commit", args]` | `unwrap(gitApi.diff(args))` | `Infinity` | `CommitFileDiff.tsx` — immutable per commit range. |
 | `useStashShowFiles(path, index)` | `["repo", path, "stash-files", index]` | `unwrap(gitApi.stashShowFiles(index))` | `Infinity` | `StashDetail.tsx` |
 
