@@ -1,6 +1,6 @@
 {
   "name": "git-vibed",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Experimental 100% vibe-coded Git GUI client",
   "main": "dist-electron/main.js",
