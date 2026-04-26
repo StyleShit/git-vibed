@@ -6,10 +6,10 @@ import { useSettings } from "../../stores/settings";
 import {
   commitFilesOptions,
   gitLogOptions,
-  gitStatusOptions,
   ghAvailableOptions,
   prsOptions,
 } from "../../queries/gitApi";
+import { useWipCount } from "../../queries/wipCount";
 import {
   CloseIcon,
   CopyIcon,
@@ -41,14 +41,10 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
   const ghAvailable = useQuery(ghAvailableOptions(activePath)).data ?? false;
   const prs =
     useQuery(prsOptions(activePath, prStateFilter, ghAvailable)).data ?? [];
-  const status = useQuery(gitStatusOptions(activePath)).data;
   const toast = useUI((s) => s.toast);
   const view = useSettings((s) => s.fileListViewMode);
   const setView = useSettings((s) => s.setFileListViewMode);
-  const wipCount =
-    (status?.staged.length ?? 0) +
-    (status?.unstaged.length ?? 0) +
-    (status?.conflicted.length ?? 0);
+  const wipCount = useWipCount(activePath);
 
   const commit = useMemo<Commit | null>(
     () => commits.find((x) => x.hash === hash) ?? null,

@@ -9,6 +9,7 @@ import {
   gitStatusOptions,
   gitWorktreesOptions,
 } from "../../queries/gitApi";
+import { isWorktreePath, worktreesRelativeToRepo } from "../../queries/wipCount";
 import {
   discardMutation,
   stageMutation,
@@ -24,7 +25,7 @@ import {
   PathIcon,
   TreeIcon,
 } from "../ui/Icons";
-import type { FileChange, Worktree } from "@shared/types";
+import type { FileChange } from "@shared/types";
 
 type ViewMode = "path" | "tree";
 
@@ -783,23 +784,3 @@ function StatusBadge({ status }: { status: FileChange["status"] }) {
 
 // Worktree paths are stored absolute; convert to repo-relative so we can
 // compare against the relative paths `git status` emits.
-function worktreesRelativeToRepo(worktrees: Worktree[], repoPath: string): string[] {
-  if (!repoPath) return [];
-  const norm = repoPath.replace(/\\/g, "/").replace(/\/+$/, "");
-  const rels: string[] = [];
-  for (const w of worktrees) {
-    if (w.isMain) continue;
-    const wp = w.path.replace(/\\/g, "/").replace(/\/+$/, "");
-    if (wp.startsWith(norm + "/")) {
-      rels.push(wp.slice(norm.length + 1));
-    }
-  }
-  return rels;
-}
-
-function isWorktreePath(filePath: string, worktreeRels: string[]): boolean {
-  for (const rel of worktreeRels) {
-    if (filePath === rel || filePath.startsWith(rel + "/")) return true;
-  }
-  return false;
-}

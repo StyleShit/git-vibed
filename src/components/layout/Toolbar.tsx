@@ -10,6 +10,7 @@ import {
   gitStatusOptions,
   gitUndoOptions,
 } from "../../queries/gitApi";
+import { useWipCount } from "../../queries/wipCount";
 import {
   checkoutMutation,
   fetchMutation,
@@ -178,10 +179,7 @@ export function Toolbar() {
     }
   }
 
-  const changeCount =
-    (status?.staged.length ?? 0) +
-    (status?.unstaged.length ?? 0) +
-    (status?.conflicted.length ?? 0);
+  const changeCount = useWipCount(path);
 
   return (
     <div className="flex h-11 shrink-0 items-center gap-1 border-b border-neutral-800 bg-neutral-925 px-2">

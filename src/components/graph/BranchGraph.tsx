@@ -9,6 +9,7 @@ import {
   gitRemotesOptions,
   gitStatusOptions,
 } from "../../queries/gitApi";
+import { useWipCount } from "../../queries/wipCount";
 import {
   branchRenameMutation,
   checkoutCreateMutation,
@@ -133,10 +134,7 @@ export function BranchGraph() {
     return set;
   }, [layout, hoveredBranch]);
 
-  const changeCount =
-    (status?.staged.length ?? 0) +
-    (status?.unstaged.length ?? 0) +
-    (status?.conflicted.length ?? 0);
+  const changeCount = useWipCount(activePath);
 
   return (
     <div className="flex h-full">
