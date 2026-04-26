@@ -2,38 +2,42 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { repoKey } from "./gitApi";
 
-// Mapping mirrors App.tsx's existing refreshX fan-out:
+// Mapping mirrors the watcher's event types:
 //   head     -> status, branches, log, worktrees, undo
-//   index    -> status, stashes
-//   worktree -> same bucket as index today
+//   index    -> status, stashes, WIP diff (the file the user has open)
+//   worktree -> same bucket as index
 //   refs     -> branches, log, tags
-// Keep in sync with App.tsx until Step E removes the old listener.
-type QueryKind =
-  | "status"
-  | "branches"
-  | "log"
-  | "remotes"
-  | "prs"
-  | "stashes"
-  | "tags"
-  | "worktrees"
-  | "undo"
-  | "ghAvailable";
+//
+// Each entry is a key suffix appended to `repoKey(path)` — multi-segment
+// suffixes (like ["diff", "wip"]) invalidate every WIP-diff query at
+// that prefix in one call.
+type KeySuffix = readonly string[];
 
-const HEAD: QueryKind[] = ["status", "branches", "log", "worktrees", "undo"];
-const INDEX: QueryKind[] = ["status", "stashes"];
-const REFS: QueryKind[] = ["branches", "log", "tags"];
-const FETCH_CHANGED: QueryKind[] = ["branches", "log", "tags", "status"];
+const HEAD: KeySuffix[] = [
+  ["status"],
+  ["branches"],
+  ["log"],
+  ["worktrees"],
+  ["undo"],
+];
+const INDEX: KeySuffix[] = [["status"], ["stashes"], ["diff", "wip"]];
+const REFS: KeySuffix[] = [["branches"], ["log"], ["tags"]];
+const FETCH_CHANGED: KeySuffix[] = [
+  ["branches"],
+  ["log"],
+  ["tags"],
+  ["status"],
+];
 
 // Translates main-process watcher events into TanStack Query
-// invalidations. Runs in parallel with the zustand refresh* fan-out
-// during Steps A–D; the old path is removed in Step E.
+// invalidations. The only path the watcher uses to push state into
+// the cache.
 export function RepoEventBridge() {
   const qc = useQueryClient();
   useEffect(() => {
-    const invalidate = (path: string, kinds: QueryKind[]) => {
-      for (const k of kinds) {
-        qc.invalidateQueries({ queryKey: [...repoKey(path), k] });
+    const invalidate = (path: string, suffixes: KeySuffix[]) => {
+      for (const suffix of suffixes) {
+        qc.invalidateQueries({ queryKey: [...repoKey(path), ...suffix] });
       }
     };
 

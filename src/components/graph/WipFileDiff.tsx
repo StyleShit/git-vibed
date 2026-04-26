@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useUI } from "../../stores/ui";
 import { useActiveTab } from "../../stores/repo";
-import { unwrap } from "../../lib/ipc";
 import { useSettings } from "../../stores/settings";
 import { buildHunkPatch, buildLinePatch } from "../../lib/patch-builder";
 import { detectLanguage } from "../../lib/highlight";
+import { wipDiffOptions } from "../../queries/gitApi";
 import {
   discardPatchMutation,
   stagePatchMutation,
   unstagePatchMutation,
 } from "../../queries/mutations";
-import type { FileDiff } from "@shared/types";
 import { ChevronRightIcon, CloseIcon } from "../ui/Icons";
 import { SplitView, UnifiedView, type HunkAction } from "./DiffView";
 import { useConfirm } from "../ui/Confirm";
@@ -22,7 +21,6 @@ import { useConfirm } from "../ui/Confirm";
 const key = (h: number, l: number) => `${h}:${l}`;
 
 export function WipFileDiff({ path, staged }: { path: string; staged: boolean }) {
-  const [diff, setDiff] = useState<FileDiff | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lastClicked, setLastClicked] = useState<{ h: number; l: number } | null>(null);
   const toast = useUI((s) => s.toast);
@@ -36,26 +34,19 @@ export function WipFileDiff({ path, staged }: { path: string; staged: boolean })
   const setViewMode = useSettings((s) => s.setDiffViewMode);
   const lang = useMemo(() => detectLanguage(path), [path]);
 
+  const { data: diff = null, error: diffError } = useQuery(
+    wipDiffOptions(activePath, path, staged),
+  );
+
+  // Selection is per-file; switching files would otherwise toggle the
+  // wrong hunk lines because the keys (hunkIdx:lineIdx) overlap.
   useEffect(() => {
-    // Keep the previous diff visible during the fetch so clicking
-    // through files doesn't flash "Loading diff…" between each pair.
-    // Selection is per-file, so we do clear it — keeping the old
-    // line-selection keys on a different file's hunks would toggle
-    // lines the user never clicked.
     setSelected(new Set());
-    let cancelled = false;
-    void (async () => {
-      try {
-        const d = await unwrap(window.gitApi.diff(path, { staged }));
-        if (!cancelled) setDiff(d);
-      } catch (e) {
-        if (!cancelled) toast("error", e instanceof Error ? e.message : String(e));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [path, staged, toast]);
+  }, [path, staged]);
+
+  useEffect(() => {
+    if (diffError) toast("error", diffError.message);
+  }, [diffError, toast]);
 
   // Click toggles one line; shift-click extends from the last-clicked line
   // to the current one inclusive. Range selection only covers the same hunk

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useActiveTab } from "../../stores/repo";
-import { gitStashesOptions } from "../../queries/gitApi";
+import { gitStashesOptions, stashFilesOptions } from "../../queries/gitApi";
 import {
   stashApplyMutation,
   stashDropMutation,
@@ -9,7 +9,6 @@ import {
 } from "../../queries/mutations";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
-import { maybe, unwrap } from "../../lib/ipc";
 import {
   CloseIcon,
   CommitIcon,
@@ -38,44 +37,34 @@ export function StashDetail({ index }: { index: number }) {
   const stashPopMut = useMutation(stashPopMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const confirmDialog = useConfirm();
-  const [files, setFiles] = useState<FileDiff[] | null>(null);
   const view = useSettings((s) => s.fileListViewMode);
   const setView = useSettings((s) => s.setFileListViewMode);
   const [busy, setBusy] = useState(false);
 
+  // `stash` may be undefined transiently while the stash list refetches
+  // after a drop/pop; gating on it avoids a doomed query for a
+  // no-longer-existent index.
+  const filesQuery = useQuery({
+    ...stashFilesOptions(activePath, index),
+    enabled: !!activePath && !!stash,
+  });
+  const files: FileDiff[] | null = filesQuery.data ?? null;
+
+  // Auto-select the first file whenever the current selection doesn't
+  // point inside this stash — covers both the initial land (no
+  // selection) and the switch-between-stashes case (selection left
+  // over from the previous stash). Same-stash file clicks keep the
+  // user's manual pick because the selection check matches and we
+  // fall through without touching it.
   useEffect(() => {
-    if (!stash) {
-      setFiles(null);
-      return;
+    if (!files || files.length === 0) return;
+    const selectionInStash =
+      selectedStashFile != null && selectedStashFile.index === index;
+    if (!selectionInStash) {
+      selectStashFile({ index, path: files[0].path });
     }
-    // Keep the previous stash's file list on screen until the new one
-    // arrives — eagerly resetting to null caused a "Loading…" flash
-    // every time the user clicked a different stash. A cancelled
-    // flag keeps an older in-flight response from overwriting a
-    // newer stash's data if the user clicks quickly.
-    let cancelled = false;
-    void (async () => {
-      const res = await maybe(window.gitApi.stashShowFiles(index));
-      if (cancelled) return;
-      const list = res ?? [];
-      setFiles(list);
-      // Auto-select the first file whenever the current selection
-      // doesn't point inside this stash — covers both the initial
-      // land (no selection) and the switch-between-stashes case
-      // (selection left over from the previous stash). Same-stash
-      // file clicks keep the user's manual pick because the index
-      // matches and we fall through without touching it.
-      const selectionInStash =
-        selectedStashFile != null && selectedStashFile.index === index;
-      if (list.length > 0 && !selectionInStash) {
-        selectStashFile({ index, path: list[0].path });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, stash]);
+  }, [index, files]);
 
   const stats = useMemo(() => {
     if (!files) return { modified: 0, added: 0, deleted: 0 };

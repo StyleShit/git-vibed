@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useActiveTabShallow } from "../../stores/repo";
+import { useActivePath, useRepo } from "../../stores/repo";
 import { useSettings } from "../../stores/settings";
 import {
   gitStatusOptions,
@@ -11,10 +11,10 @@ import { BranchIcon } from "../ui/Icons";
 import type { PullRequest } from "@shared/types";
 
 export function StatusBar() {
-  const { path, behindRemote } = useActiveTabShallow((t) => ({
-    path: t?.path ?? null,
-    behindRemote: t?.behindRemote ?? 0,
-  }));
+  const path = useActivePath();
+  const behindRemote = useRepo(
+    (s) => s.tabs[s.activeIdx]?.behindRemote ?? 0,
+  );
   const prStateFilter = useSettings((s) => s.prStateFilter);
   const status = useQuery(gitStatusOptions(path)).data ?? null;
   const ghAvailable = useQuery(ghAvailableOptions(path)).data ?? false;

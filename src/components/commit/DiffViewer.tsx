@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import type { DiffHunk, DiffLine, FileDiff } from "@shared/types";
-import { unwrap } from "../../lib/ipc";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import type { DiffHunk, DiffLine } from "@shared/types";
 import { useUI } from "../../stores/ui";
 import { useActiveTab } from "../../stores/repo";
 import { useSettings } from "../../stores/settings";
 import { buildHunkPatch, buildLinePatch } from "../../lib/patch-builder";
+import { wipDiffOptions } from "../../queries/gitApi";
 import {
   stagePatchMutation,
   unstagePatchMutation,
@@ -21,7 +21,6 @@ interface Props {
 const key = (h: number, l: number) => `${h}:${l}`;
 
 export function DiffViewer({ file, staged }: Props) {
-  const [diff, setDiff] = useState<FileDiff | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const toast = useUI((s) => s.toast);
   const activePath = useActiveTab()?.path ?? "";
@@ -30,18 +29,17 @@ export function DiffViewer({ file, staged }: Props) {
   const viewMode = useSettings((s) => s.diffViewMode);
   const setViewMode = useSettings((s) => s.setDiffViewMode);
 
+  const { data: diff = null, error: diffError } = useQuery(
+    wipDiffOptions(activePath, file, staged),
+  );
+
   useEffect(() => {
-    setDiff(null);
     setSelected(new Set());
-    void (async () => {
-      try {
-        const d = await unwrap(window.gitApi.diff(file, { staged }));
-        setDiff(d);
-      } catch (e) {
-        toast("error", e instanceof Error ? e.message : String(e));
-      }
-    })();
-  }, [file, staged, toast]);
+  }, [file, staged]);
+
+  useEffect(() => {
+    if (diffError) toast("error", diffError.message);
+  }, [diffError, toast]);
 
   const toggleLine = (h: number, l: number) =>
     setSelected((prev) => {

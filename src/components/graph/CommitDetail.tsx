@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useActiveTab } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
-import { maybe } from "../../lib/ipc";
 import {
+  commitFilesOptions,
   gitLogOptions,
   gitStatusOptions,
   ghAvailableOptions,
@@ -43,42 +43,25 @@ export function CommitDetail({ hash, onClose }: { hash: string; onClose: () => v
     useQuery(prsOptions(activePath, prStateFilter, ghAvailable)).data ?? [];
   const status = useQuery(gitStatusOptions(activePath)).data;
   const toast = useUI((s) => s.toast);
-  const [commit, setCommit] = useState<Commit | null>(null);
-  const [files, setFiles] = useState<CommitFile[]>([]);
   const view = useSettings((s) => s.fileListViewMode);
   const setView = useSettings((s) => s.setFileListViewMode);
-  const [loadingFiles, setLoadingFiles] = useState(false);
   const wipCount =
     (status?.staged.length ?? 0) +
     (status?.unstaged.length ?? 0) +
     (status?.conflicted.length ?? 0);
 
-  useEffect(() => {
-    setCommit(commits.find((x) => x.hash === hash) ?? null);
-  }, [hash, commits]);
+  const commit = useMemo<Commit | null>(
+    () => commits.find((x) => x.hash === hash) ?? null,
+    [hash, commits],
+  );
 
-  useEffect(() => {
-    if (!commit) {
-      setFiles([]);
-      return;
-    }
-    // Keep the previous commit's file list on screen during the
-    // fetch so clicking between commits doesn't flash the loading
-    // state on every switch. Only show the spinner on the initial
-    // load (when we don't have any files yet).
-    setLoadingFiles((prev) => prev || files.length === 0);
-    let cancelled = false;
-    void (async () => {
-      const res = await maybe(window.gitApi.commitFiles(commit.hash));
-      if (cancelled) return;
-      setFiles(res ?? []);
-      setLoadingFiles(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commit]);
+  // commitFilesOptions caches forever per (path, hash) — switching
+  // between commits and back returns the cached list synchronously,
+  // so we don't need the manual "keep previous on screen" dance the
+  // useEffect+useState version had.
+  const filesQuery = useQuery(commitFilesOptions(activePath, hash));
+  const files = useMemo(() => filesQuery.data ?? [], [filesQuery.data]);
+  const loadingFiles = filesQuery.isLoading;
 
   // Link to a PR whose merge commit matches (GitHub writes "Merge pull
   // request #NN" in the subject), or whose head branch tip is this commit.

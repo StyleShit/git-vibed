@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useUI } from "../../stores/ui";
+import { useActiveTab } from "../../stores/repo";
 import { useSettings } from "../../stores/settings";
-import { maybe } from "../../lib/ipc";
 import { detectLanguage } from "../../lib/highlight";
-import type { FileDiff } from "@shared/types";
+import { commitDiffOptions } from "../../queries/gitApi";
 import { ChevronRightIcon, CloseIcon } from "../ui/Icons";
 import { SplitView, UnifiedView } from "./DiffView";
 
@@ -13,28 +14,11 @@ import { SplitView, UnifiedView } from "./DiffView";
 // WIP diff so toggling it in one place sticks everywhere.
 export function CommitFileDiff({ hash, path }: { hash: string; path: string }) {
   const selectCommitFile = useUI((s) => s.selectCommitFile);
+  const activePath = useActiveTab()?.path ?? "";
   const viewMode = useSettings((s) => s.diffViewMode);
   const setViewMode = useSettings((s) => s.setDiffViewMode);
-  const [diff, setDiff] = useState<FileDiff | null>(null);
   const lang = useMemo(() => detectLanguage(path), [path]);
-
-  useEffect(() => {
-    // Leave the previous diff on screen while the new one loads —
-    // clearing to null between files caused a "Loading diff…" flash
-    // on every switch. Cancel flag stops a stale response from
-    // landing after a faster newer one.
-    let cancelled = false;
-    void (async () => {
-      const d = await maybe(
-        window.gitApi.diff(path, { commitA: `${hash}^`, commitB: hash }),
-      );
-      if (cancelled) return;
-      setDiff(d ?? { path, binary: false, hunks: [], raw: "" });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [hash, path]);
+  const { data: diff = null } = useQuery(commitDiffOptions(activePath, hash, path));
 
   return (
     <div className="flex h-full flex-col">

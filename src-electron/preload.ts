@@ -58,8 +58,11 @@ const gitApi = {
   discard: (files: string[]) => invoke<void>(GIT.DISCARD, files),
   markResolved: (files: string[]) => invoke<void>(GIT.MARK_RESOLVED, files),
 
-  diff: (file: string, opts?: { staged?: boolean; commitA?: string; commitB?: string }) =>
-    invoke<FileDiff>(GIT.DIFF, { file, ...opts }),
+  diff: (
+    repoPath: string,
+    file: string,
+    opts?: { staged?: boolean; commitA?: string; commitB?: string },
+  ) => invoke<FileDiff>(GIT.DIFF, repoPath, { file, ...opts }),
 
   log: (repoPath: string, opts?: LogOptions) =>
     invoke<Commit[]>(GIT.LOG, repoPath, opts),
@@ -102,18 +105,21 @@ const gitApi = {
   remoteSetUrl: (name: string, url: string, push?: boolean) =>
     invoke<void>(GIT.REMOTE_SET_URL, { name, url, push }),
 
-  configList: () => invoke<ConfigEntry[]>(GIT.CONFIG_LIST),
-  configGet: (key: string, scope?: "local" | "global" | "system") =>
-    invoke<string | null>(GIT.CONFIG_GET, { key, scope }),
+  configList: (repoPath: string) => invoke<ConfigEntry[]>(GIT.CONFIG_LIST, repoPath),
+  configGet: (
+    repoPath: string,
+    key: string,
+    scope?: "local" | "global" | "system",
+  ) => invoke<string | null>(GIT.CONFIG_GET, repoPath, { key, scope }),
   configSet: (key: string, value: string, scope: "local" | "global") =>
     invoke<void>(GIT.CONFIG_SET, { key, value, scope }),
 
-  fileAtRef: (ref: string, filePath: string) =>
-    invoke<string>(GIT.FILE_AT_REF, { ref, path: filePath }),
+  fileAtRef: (repoPath: string, ref: string, filePath: string) =>
+    invoke<string>(GIT.FILE_AT_REF, repoPath, { ref, path: filePath }),
   writeFile: (filePath: string, content: string) =>
     invoke<void>(GIT.WRITE_FILE, { path: filePath, content }),
-  mergeMessage: () => invoke<string>(GIT.MERGE_MESSAGE),
-  conflictKind: (filePath: string) =>
+  mergeMessage: (repoPath: string) => invoke<string>(GIT.MERGE_MESSAGE, repoPath),
+  conflictKind: (repoPath: string, filePath: string) =>
     invoke<
       | "both-modified"
       | "deleted-by-us"
@@ -122,20 +128,21 @@ const gitApi = {
       | "ours-only"
       | "theirs-only"
       | "unknown"
-    >(GIT.CONFLICT_KIND, filePath),
+    >(GIT.CONFLICT_KIND, repoPath, filePath),
   resolveWithSide: (filePath: string, side: "ours" | "theirs") =>
     invoke<void>(GIT.RESOLVE_SIDE, { path: filePath, side }),
   resolveWithDelete: (filePath: string) =>
     invoke<void>(GIT.RESOLVE_DELETE, filePath),
-  findRenameTarget: (filePath: string, side: "ours" | "theirs") =>
-    invoke<string | null>(GIT.FIND_RENAME_TARGET, { path: filePath, side }),
+  findRenameTarget: (repoPath: string, filePath: string, side: "ours" | "theirs") =>
+    invoke<string | null>(GIT.FIND_RENAME_TARGET, repoPath, { path: filePath, side }),
 
   stashList: (repoPath: string) => invoke<Stash[]>(GIT.STASH_LIST, repoPath),
   stashApply: (index: number) => invoke<void>(GIT.STASH_APPLY, index),
   stashDrop: (index: number) => invoke<void>(GIT.STASH_DROP, index),
-  stashShow: (index: number) => invoke<string>(GIT.STASH_SHOW, index),
-  stashShowFiles: (index: number) =>
-    invoke<FileDiff[]>(GIT.STASH_SHOW_FILES, index),
+  stashShow: (repoPath: string, index: number) =>
+    invoke<string>(GIT.STASH_SHOW, repoPath, index),
+  stashShowFiles: (repoPath: string, index: number) =>
+    invoke<FileDiff[]>(GIT.STASH_SHOW_FILES, repoPath, index),
 
   tags: (repoPath: string) => invoke<Tag[]>(GIT.TAGS, repoPath),
   tagCreate: (name: string, ref: string, message?: string) =>
@@ -152,7 +159,8 @@ const gitApi = {
     invoke<void>(GIT.WORKTREE_LOCK, { path, reason }),
   worktreeUnlock: (path: string) => invoke<void>(GIT.WORKTREE_UNLOCK, path),
 
-  commitFiles: (hash: string) => invoke<CommitFile[]>(GIT.COMMIT_FILES, hash),
+  commitFiles: (repoPath: string, hash: string) =>
+    invoke<CommitFile[]>(GIT.COMMIT_FILES, repoPath, hash),
 
   undoHead: () => invoke<{ label: string | null }>(GIT.UNDO_HEAD),
   redoHead: () => invoke<{ label: string | null }>(GIT.REDO_HEAD),
@@ -176,8 +184,9 @@ const gitApi = {
 };
 
 const ghApi = {
-  available: () => invoke<boolean>(GH.AVAILABLE),
-  prList: (state?: "open" | "closed" | "all") => invoke<PullRequest[]>(GH.PR_LIST, state),
+  available: (repoPath: string) => invoke<boolean>(GH.AVAILABLE, repoPath),
+  prList: (repoPath: string, state?: "open" | "closed" | "all") =>
+    invoke<PullRequest[]>(GH.PR_LIST, repoPath, state),
   prView: (number: number) => invoke<PullRequest>(GH.PR_VIEW, number),
   prCreate: (opts: PRCreateOptions) => invoke<PullRequest>(GH.PR_CREATE, opts),
   prMerge: (number: number, method: MergeMethod) =>

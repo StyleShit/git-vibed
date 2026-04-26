@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Select } from "@base-ui-components/react/select";
 import { unwrap } from "../../lib/ipc";
 import { useUI } from "../../stores/ui";
+import { useActiveTab } from "../../stores/repo";
 import { useSettings } from "../../stores/settings";
 import { CheckIcon, ChevronDownIcon, CloseIcon } from "../ui/Icons";
 import type { ConfigEntry } from "@shared/types";
@@ -142,11 +143,12 @@ function SettingSelect<T extends string | number>({
 function GitConfigPanel() {
   const [entries, setEntries] = useState<ConfigEntry[]>([]);
   const toast = useUI((s) => s.toast);
+  const activePath = useActiveTab()?.path ?? "";
   const [scope, setScope] = useState<"local" | "global">("local");
 
   async function refresh() {
     try {
-      const list = await unwrap(window.gitApi.configList());
+      const list = await unwrap(window.gitApi.configList(activePath));
       setEntries(list);
     } catch (e) {
       toast("error", e instanceof Error ? e.message : String(e));
@@ -156,7 +158,7 @@ function GitConfigPanel() {
   useEffect(() => {
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activePath]);
 
   const byKey = useMemo(() => {
     const map = new Map<string, ConfigEntry[]>();

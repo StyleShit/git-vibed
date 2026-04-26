@@ -13,6 +13,17 @@ import {
   repoKey,
 } from "./gitApi";
 
+// Prefix keys that match every variant of a parameterized detail query.
+// `["repo", path, "diff", "wip"]` invalidates wipDiffOptions for any
+// (file, staged) pair; same idea for stash-files across all indexes.
+function wipDiffPrefix(path: string) {
+  return [...repoKey(path), "diff", "wip"] as const;
+}
+
+function stashFilesPrefix(path: string) {
+  return [...repoKey(path), "stash-files"] as const;
+}
+
 // Invalidate a list of query keys and wait for the refetches to land.
 // Returning the joined promise from a mutation's onSuccess makes
 // mutateAsync await the refetch — without that, callers that read from
@@ -35,7 +46,8 @@ export function stageMutation(
     mutationFn: async (files) => {
       await unwrap(window.gitApi.stage(files));
     },
-    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+    onSuccess: () =>
+      invalidate([gitStatusOptions(path).queryKey, wipDiffPrefix(path)]),
   };
 }
 
@@ -46,7 +58,8 @@ export function unstageMutation(
     mutationFn: async (files) => {
       await unwrap(window.gitApi.unstage(files));
     },
-    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+    onSuccess: () =>
+      invalidate([gitStatusOptions(path).queryKey, wipDiffPrefix(path)]),
   };
 }
 
@@ -57,7 +70,8 @@ export function discardMutation(
     mutationFn: async (files) => {
       await unwrap(window.gitApi.discard(files));
     },
-    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+    onSuccess: () =>
+      invalidate([gitStatusOptions(path).queryKey, wipDiffPrefix(path)]),
   };
 }
 
@@ -68,7 +82,8 @@ export function stagePatchMutation(
     mutationFn: async (patch) => {
       await unwrap(window.gitApi.stagePatch(patch));
     },
-    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+    onSuccess: () =>
+      invalidate([gitStatusOptions(path).queryKey, wipDiffPrefix(path)]),
   };
 }
 
@@ -79,7 +94,8 @@ export function unstagePatchMutation(
     mutationFn: async (patch) => {
       await unwrap(window.gitApi.unstagePatch(patch));
     },
-    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+    onSuccess: () =>
+      invalidate([gitStatusOptions(path).queryKey, wipDiffPrefix(path)]),
   };
 }
 
@@ -90,7 +106,8 @@ export function discardPatchMutation(
     mutationFn: async (patch) => {
       await unwrap(window.gitApi.discardPatch(patch));
     },
-    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+    onSuccess: () =>
+      invalidate([gitStatusOptions(path).queryKey, wipDiffPrefix(path)]),
   };
 }
 
@@ -101,7 +118,8 @@ export function markResolvedMutation(
     mutationFn: async (files) => {
       await unwrap(window.gitApi.markResolved(files));
     },
-    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+    onSuccess: () =>
+      invalidate([gitStatusOptions(path).queryKey, wipDiffPrefix(path)]),
   };
 }
 
@@ -110,13 +128,17 @@ export function markResolvedMutation(
 type StashInput = { message?: string; files?: string[] } | string | undefined;
 
 function afterStashMutation(path: string) {
-  // Every stash mutation moves both the WIP state (status) and the stash
-  // list; stashPop/stashApply can also surface new WIP files from the
-  // stash, which changes the working tree.
+  // Every stash mutation moves both the WIP state (status + WIP diff)
+  // and the stash list; stashPop/stashApply can also surface new WIP
+  // files from the stash, which changes the working tree. stashDrop
+  // shifts indexes so previously-cached stash-files entries can now
+  // point at a different stash — wipe the whole prefix.
   return invalidate([
     gitStatusOptions(path).queryKey,
     gitStashesOptions(path).queryKey,
     gitLogOptions(path).queryKey,
+    wipDiffPrefix(path),
+    stashFilesPrefix(path),
   ]);
 }
 
@@ -643,7 +665,8 @@ export function writeFileMutation(
     mutationFn: async ({ path: filePath, content }) => {
       await unwrap(window.gitApi.writeFile(filePath, content));
     },
-    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+    onSuccess: () =>
+      invalidate([gitStatusOptions(path).queryKey, wipDiffPrefix(path)]),
   };
 }
 
@@ -659,7 +682,8 @@ export function resolveWithSideMutation(
     mutationFn: async ({ filePath, side }) => {
       await unwrap(window.gitApi.resolveWithSide(filePath, side));
     },
-    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+    onSuccess: () =>
+      invalidate([gitStatusOptions(path).queryKey, wipDiffPrefix(path)]),
   };
 }
 
@@ -670,7 +694,8 @@ export function resolveWithDeleteMutation(
     mutationFn: async (filePath) => {
       await unwrap(window.gitApi.resolveWithDelete(filePath));
     },
-    onSuccess: () => invalidate([gitStatusOptions(path).queryKey]),
+    onSuccess: () =>
+      invalidate([gitStatusOptions(path).queryKey, wipDiffPrefix(path)]),
   };
 }
 

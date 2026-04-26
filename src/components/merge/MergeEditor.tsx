@@ -191,11 +191,12 @@ export function MergeEditor() {
         // conflictKind is null) between the reset and the first
         // successful setState. Computing the final values first and
         // batching a single atomic update avoids that entirely.
-        const kindRes = await unwrap(window.gitApi.conflictKind(file));
+        const repoPath = activePath ?? "";
+        const kindRes = await unwrap(window.gitApi.conflictKind(repoPath, file));
         const [o, b, t] = await Promise.all([
-          unwrap(window.gitApi.fileAtRef(":2", file)),
-          unwrap(window.gitApi.fileAtRef(":1", file)),
-          unwrap(window.gitApi.fileAtRef(":3", file)),
+          unwrap(window.gitApi.fileAtRef(repoPath, ":2", file)),
+          unwrap(window.gitApi.fileAtRef(repoPath, ":1", file)),
+          unwrap(window.gitApi.fileAtRef(repoPath, ":3", file)),
         ]);
         let nextRegions: ConflictRegion[] = [];
         let nextResult = "";
@@ -218,12 +219,12 @@ export function MergeEditor() {
                 : null;
           if (renameSide) {
             const newPath = await unwrap(
-              window.gitApi.findRenameTarget(file, renameSide),
+              window.gitApi.findRenameTarget(repoPath, file, renameSide),
             );
             if (newPath) {
               const ref = renameSide === "theirs" ? "MERGE_HEAD" : "HEAD";
               const newContent = await unwrap(
-                window.gitApi.fileAtRef(ref, newPath),
+                window.gitApi.fileAtRef(repoPath, ref, newPath),
               );
               nextRename = { newPath, newContent };
             }
@@ -246,7 +247,7 @@ export function MergeEditor() {
     return () => {
       cancelled = true;
     };
-  }, [file, toast]);
+  }, [file, toast, activePath]);
 
   // Decorate each pane based on the current regions and decisions.
   //   ours/theirs: per-line background (green = added vs base) plus a

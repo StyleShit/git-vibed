@@ -13,9 +13,13 @@ function wrap<T>(fn: () => Promise<T>): Promise<Result<T>> {
 export function registerGhHandlers(ipc: IpcMain, getCwd: () => string | null) {
   const gh = new GhExecutor(getCwd);
 
-  ipc.handle(GH.AVAILABLE, () => wrap(() => gh.available()));
-  ipc.handle(GH.PR_LIST, (_e, state?: "open" | "closed" | "all") =>
-    wrap(() => gh.prList(state ?? "open")),
+  ipc.handle(GH.AVAILABLE, (_e, repoPath?: string) =>
+    wrap(() => gh.available(repoPath)),
+  );
+  ipc.handle(
+    GH.PR_LIST,
+    (_e, repoPath: string | undefined, state?: "open" | "closed" | "all") =>
+      wrap(() => gh.prList(state ?? "open", repoPath)),
   );
   ipc.handle(GH.PR_VIEW, (_e, num: number) => wrap(() => gh.prView(num)));
   ipc.handle(GH.PR_CREATE, (_e, opts: PRCreateOptions) => wrap(() => gh.prCreate(opts)));

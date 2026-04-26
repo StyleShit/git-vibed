@@ -122,7 +122,7 @@ export function CommitPanel() {
     }
     if (mergeMessagePrefilled || amend) return;
     void (async () => {
-      const res = await window.gitApi.mergeMessage();
+      const res = await window.gitApi.mergeMessage(activePath ?? "");
       if (!res.ok || !res.data) return;
       const [first, ...rest] = res.data.split(/\n\n/);
       // Only prefill if the user hasn't already started typing something,

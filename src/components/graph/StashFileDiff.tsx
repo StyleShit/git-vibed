@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useUI } from "../../stores/ui";
+import { useActiveTab } from "../../stores/repo";
 import { useSettings } from "../../stores/settings";
-import { maybe } from "../../lib/ipc";
 import { detectLanguage } from "../../lib/highlight";
-import type { FileDiff } from "@shared/types";
+import { stashFilesOptions } from "../../queries/gitApi";
 import { ChevronRightIcon, CloseIcon } from "../ui/Icons";
 import { SplitView, UnifiedView } from "./DiffView";
 
@@ -12,27 +13,22 @@ import { SplitView, UnifiedView } from "./DiffView";
 // inspector, see the diff here in the main area.
 export function StashFileDiff({ index, path }: { index: number; path: string }) {
   const selectStashFile = useUI((s) => s.selectStashFile);
+  const activePath = useActiveTab()?.path ?? "";
   const viewMode = useSettings((s) => s.diffViewMode);
   const setViewMode = useSettings((s) => s.setDiffViewMode);
-  const [file, setFile] = useState<FileDiff | null>(null);
   const lang = useMemo(() => detectLanguage(path), [path]);
-
-  useEffect(() => {
-    // Leave the previous diff on screen while the new one loads so
-    // rapid file switches don't flash a "Loading diff…" placeholder
-    // between every pair. Cancel flag prevents an older response
-    // from clobbering newer state if the fetches race.
-    let cancelled = false;
-    void (async () => {
-      const all = await maybe(window.gitApi.stashShowFiles(index));
-      if (cancelled) return;
-      const match = all?.find((f) => f.path === path) ?? null;
-      setFile(match ?? { path, binary: false, hunks: [], raw: "" });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [index, path]);
+  const { data: stashFiles } = useQuery(stashFilesOptions(activePath, index));
+  const file = useMemo(() => {
+    if (!stashFiles) return null;
+    return (
+      stashFiles.find((f) => f.path === path) ?? {
+        path,
+        binary: false,
+        hunks: [],
+        raw: "",
+      }
+    );
+  }, [stashFiles, path]);
 
   return (
     <div className="flex h-full flex-col">

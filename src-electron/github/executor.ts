@@ -39,16 +39,21 @@ export class GhExecutor {
     });
   }
 
-  async available(): Promise<boolean> {
+  async available(cwd?: string): Promise<boolean> {
     try {
-      await execFileP("gh", ["auth", "status"], { cwd: this.getCwd() ?? process.cwd() });
+      await execFileP("gh", ["auth", "status"], {
+        cwd: cwd ?? this.getCwd() ?? process.cwd(),
+      });
       return true;
     } catch {
       return false;
     }
   }
 
-  async prList(state: "open" | "closed" | "all" = "open"): Promise<PullRequest[]> {
+  async prList(
+    state: "open" | "closed" | "all" = "open",
+    cwd?: string,
+  ): Promise<PullRequest[]> {
     const fields = [
       "number",
       "title",
@@ -61,7 +66,10 @@ export class GhExecutor {
       "reviewDecision",
       "updatedAt",
     ].join(",");
-    const raw = await this.run(["pr", "list", "--state", state, "--json", fields, "--limit", "100"]);
+    const raw = await this.run(
+      ["pr", "list", "--state", state, "--json", fields, "--limit", "100"],
+      { cwd },
+    );
     const parsed = JSON.parse(raw) as Array<{
       number: number;
       title: string;

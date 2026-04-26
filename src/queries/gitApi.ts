@@ -1,4 +1,8 @@
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import {
+  infiniteQueryOptions,
+  keepPreviousData,
+  queryOptions,
+} from "@tanstack/react-query";
 import { maybe, unwrap } from "../lib/ipc";
 
 // Every query under a tab sits under the same prefix so one
@@ -127,13 +131,82 @@ export function gitUndoOptions(path: MaybePath) {
 }
 
 export function ghAvailableOptions(path: MaybePath) {
+  const p = path ?? "";
   return queryOptions({
-    queryKey: [...repoKey(path ?? ""), "ghAvailable"] as const,
+    queryKey: [...repoKey(p), "ghAvailable"] as const,
     // maybe() so a non-gh host never throws — resolve to false.
-    queryFn: async () => (await maybe(window.ghApi.available())) ?? false,
+    queryFn: async () => (await maybe(window.ghApi.available(p))) ?? false,
     enabled: !!path,
     staleTime: Infinity,
     gcTime: Infinity,
+  });
+}
+
+// Detail-view queries — keyed by the immutable identifier (commit hash,
+// stash index, etc.). Cached forever since the content never changes for
+// a given id; only the WIP diff has staleTime: 0 and is invalidated by
+// the index/worktree watcher events via RepoEventBridge.
+
+// `placeholderData: keepPreviousData` preserves the previous file's
+// data while a new key fetches — the user sees the old diff/file list
+// instead of a "Loading…" flash on every selection change. The old
+// useEffect+useState code base had this behavior implicitly by not
+// resetting state to null on the new selection.
+
+export function commitFilesOptions(path: MaybePath, hash: string) {
+  const p = path ?? "";
+  return queryOptions({
+    queryKey: [...repoKey(p), "commit-files", hash] as const,
+    queryFn: () => unwrap(window.gitApi.commitFiles(p, hash)),
+    enabled: !!path && !!hash,
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function commitDiffOptions(path: MaybePath, hash: string, file: string) {
+  const p = path ?? "";
+  return queryOptions({
+    queryKey: [...repoKey(p), "diff", "commit", hash, file] as const,
+    queryFn: () =>
+      unwrap(window.gitApi.diff(p, file, { commitA: `${hash}^`, commitB: hash })),
+    enabled: !!path && !!hash && !!file,
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function wipDiffOptions(path: MaybePath, file: string, staged: boolean) {
+  const p = path ?? "";
+  return queryOptions({
+    queryKey: [...repoKey(p), "diff", "wip", file, staged] as const,
+    queryFn: () => unwrap(window.gitApi.diff(p, file, { staged })),
+    enabled: !!path && !!file,
+    staleTime: 0,
+    gcTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+    // Same polling as gitStatusOptions: work-tree edits never touch
+    // .git, so the watcher doesn't see them. Without this, editing
+    // the open file in another editor leaves the diff stale until
+    // the user closes and re-opens it. Only the *active* diff query
+    // polls (TanStack default), so this is one IPC every 5s.
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function stashFilesOptions(path: MaybePath, index: number) {
+  const p = path ?? "";
+  return queryOptions({
+    queryKey: [...repoKey(p), "stash-files", index] as const,
+    queryFn: () => unwrap(window.gitApi.stashShowFiles(p, index)),
+    enabled: !!path && index >= 0,
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -144,9 +217,10 @@ export function prsOptions(
   stateFilter: PRStateFilter,
   ghAvailable: boolean,
 ) {
+  const p = path ?? "";
   return queryOptions({
-    queryKey: [...repoKey(path ?? ""), "prs", stateFilter] as const,
-    queryFn: async () => (await maybe(window.ghApi.prList(stateFilter))) ?? [],
+    queryKey: [...repoKey(p), "prs", stateFilter] as const,
+    queryFn: async () => (await maybe(window.ghApi.prList(p, stateFilter))) ?? [],
     // Gated on both a live tab AND ghAvailable so non-gh hosts don't
     // churn IPC. ghAvailable is itself a query; call sites compose
     // that result in as the third argument.

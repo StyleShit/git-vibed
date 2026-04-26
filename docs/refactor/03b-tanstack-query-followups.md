@@ -14,22 +14,21 @@
 
 ## Follow-ups, in priority order
 
-### 1. Path-routed read IPCs for the remaining endpoints
+### 1. Path-routed read IPCs for the remaining endpoints — **Done**
 
-The tab-switch race fix (`8df7b67`) plumbed `repoPath` through eight read IPCs (`status`, `branches`, `log`, `remotes`, `stashList`, `tags`, `worktreeList`, `undoState`). The same pattern still has to be applied to:
+The tab-switch race fix (`8df7b67`) plumbed `repoPath` through eight read IPCs (`status`, `branches`, `log`, `remotes`, `stashList`, `tags`, `worktreeList`, `undoState`). The same pattern has now been applied to the remaining read endpoints:
 
-- `ghApi.available` (used by `ghAvailableOptions`)
-- `ghApi.prList` (used by `prsOptions`)
+- `ghApi.available` / `ghApi.prList` — `GhExecutor.available`/`prList` accept an optional `cwd` and the handlers thread `repoPath` through.
 - `gitApi.mergeMessage` (`CommitPanel`)
 - `gitApi.conflictKind` / `fileAtRef` / `findRenameTarget` (`MergeEditor`)
-- `gitApi.stashShow` / `stashShowFiles` (`StashDetail`)
+- `gitApi.stashShow` / `stashShowFiles` (`StashDetail`, `StashFileDiff`)
 - `gitApi.commitFiles` (`CommitDetail`)
-- `gitApi.diff` (`DiffViewer` / `WipFileDiff` / `CommitFileDiff`)
+- `gitApi.diff` (`DiffViewer`, `WipFileDiff`, `CommitFileDiff`)
 - `gitApi.configList` / `configGet` (`SettingsPanel`)
 
-The race shape is identical: a bg refetch fires for tab 1, user switches to tab 2, response resolves against main's active session = tab 2, gets written into tab 1's cache key. Most of the above are either single-tab-context (the merge editor) or rarely refetched in the background, so users may not hit it — but it's the same correctness gap.
+Mutations remain deferred — they run after `setActiveRepo` has flipped main's active key, so the race doesn't hit them. The unchanged write IPCs (`writeFile`, `resolveWithSide`, `resolveWithDelete`, `configSet`, etc.) still route through the active session.
 
-Pattern (already established in commit `8df7b67`):
+Pattern reference (established in commit `8df7b67`):
 
 1. `src-electron/preload.ts` — add `repoPath: string` as the first arg, pass through `invoke<T>(CHANNEL, repoPath, ...)`.
 2. `src-electron/ipc/git-handlers.ts` — destructure as `(_e, repoPath: string, ...args)` and switch `exec(repo)` → `exec(repo, repoPath)`. The `exec` helper already accepts an optional path.
@@ -40,36 +39,46 @@ Pattern (already established in commit `8df7b67`):
    ```
 4. Any other call site (e.g. `CommitPanel` calls `gitApi.log` directly outside the query) needs the path too.
 
-For `gh.*`: github operations talk to a network host, not the local repo. `gh` CLI does run with `cwd=repoPath`, so the same plumbing applies. Confirm by checking `src-electron/ipc/gh-handlers.ts`.
+### 2. Detail-view queries (originally 03b in §7 of the execution plan) — **Done**
 
-For mutations: deferred. Mutations are user-initiated. They run after `setActiveRepo` has flipped main's active key (because `setActive` awaits it before flipping `activeIdx`), so the race doesn't hit them. If you want defense-in-depth, extend the same pattern.
+The four detail-view reads now live in `src/queries/gitApi.ts` and call sites use `useQuery`:
 
-### 2. Detail-view queries (originally 03b in §7 of the execution plan)
+| Factory | queryKey | staleTime | Caller |
+| --- | --- | --- | --- |
+| `commitFilesOptions(path, hash)` | `["repo", path, "commit-files", hash]` | `Infinity` | `CommitDetail.tsx` |
+| `wipDiffOptions(path, file, staged)` | `["repo", path, "diff", "wip", file, staged]` | `0` | `WipFileDiff.tsx`, `DiffViewer.tsx` |
+| `commitDiffOptions(path, hash, file)` | `["repo", path, "diff", "commit", hash, file]` | `Infinity` | `CommitFileDiff.tsx` |
+| `stashFilesOptions(path, index)` | `["repo", path, "stash-files", index]` | `Infinity` | `StashDetail.tsx`, `StashFileDiff.tsx` |
 
-Three read IPCs are still fetched ad-hoc inside `useEffect + useState`:
+All four use `placeholderData: keepPreviousData` so switching files/commits/stashes shows the previous data during the fetch instead of flashing "Loading…" — that's how the original `useEffect + useState` versions felt.
 
-| Hook | queryKey | queryFn | staleTime | Callers |
-| --- | --- | --- | --- | --- |
-| `useCommitFiles(path, hash)` | `["repo", path, "commit-files", hash]` | `unwrap(gitApi.commitFiles(hash))` | `Infinity` | `CommitDetail.tsx` |
-| `useWipDiff(path, args)` | `["repo", path, "diff", "wip", args]` | `unwrap(gitApi.diff(args))` | `0` | `WipFileDiff.tsx`, `DiffViewer.tsx` — invalidated by status watcher |
-| `useCommitDiff(path, args)` | `["repo", path, "diff", "commit", args]` | `unwrap(gitApi.diff(args))` | `Infinity` | `CommitFileDiff.tsx` — immutable per commit range |
-| `useStashShowFiles(path, index)` | `["repo", path, "stash-files", index]` | `unwrap(gitApi.stashShowFiles(index))` | `Infinity` | `StashDetail.tsx` |
+Invalidation wiring:
+- `RepoEventBridge` INDEX bucket invalidates `["repo", path, "diff", "wip"]` so watcher index/worktree events refresh the open WIP diff.
+- Staging / discard / mark-resolved / writeFile / resolveWith\* mutations invalidate `wipDiffPrefix(path)` in their `onSuccess` so the diff refreshes the moment the mutation lands (no waiting for the watcher).
+- `afterStashMutation` invalidates both `wipDiffPrefix(path)` (pop/apply surface new WIP files) and `stashFilesPrefix(path)` (drop shifts indexes — the cached files for stash@{0} are no longer the same stash).
 
-Migrate each call site off the local `useState`. WIP diff is the only one whose key needs to be invalidated by anything (status mutations) — add it to `afterStashMutation` / staging mutation `onSuccess` lists if you want it to feel snappy. Otherwise the watcher's `index`/`worktree` event already invalidates `status`, and the WIP diff would be invalidated by a separate mechanism — easiest is to add `["repo", path, "diff", "wip"]` to `RepoEventBridge`'s `INDEX` list.
+`RepoEventBridge`'s old `QueryKind` enum is now `KeySuffix[]` so multi-segment suffixes can sit alongside single-segment ones in the same bucket.
 
-Tackle this AFTER (1), so the path-routing change applies cleanly.
+### 3. Drop `repo.ts`'s `useShallow` import — **Done**
 
-### 3. Drop `repo.ts`'s `useShallow` import if `useActiveTabShallow` is no longer used
+`useActiveTabShallow` and the `useShallow` import are gone. Replacements:
 
-After the trim, `useActiveTabShallow` is only used in `Toolbar.tsx`, `StatusBar.tsx`, and inside `repo.ts` itself. The Toolbar + StatusBar usages are tiny `(t) => ({ path, behindRemote })` shapes — could become two separate selectors. Not blocking, just a tidy-up if you find yourself there.
+- `useActivePath()` — primitive return (`string | null`), default identity equality is enough; no `useShallow` needed. Use this any time you only want the path.
+- For multi-field reads (`StatusBar` wanted `{ path, behindRemote }`, `Toolbar` wanted `{ path, backgroundFetching }`) the call sites now use two separate selectors. Cheaper than a shallow-equality picker for a 2-field shape.
 
 ### 4. Don't forget the `useUI` toast manager dance
 
 `src/stores/ui.ts` still exposes `toastManager` (Base UI) plus a `toast(kind, text)` method on the zustand store. That's intentional and works. Mentioning so a fresh agent doesn't get confused by toast wiring while reading the stores.
 
-### 5. Outstanding test gap
+### 5. Mutation acceptance tests — **Done**
 
-The three Step D acceptance tests envisioned by the plan (`stage → status updates`, `commit → log updates`, `checkout → branches update`) exist in `src/components/graph/ChangesPanel.browser.test.tsx`, `BranchGraph.browser.test.tsx`, and `stores/repo.browser.test.tsx`. They cover the invalidate → refetch → cache update path but not the **mutation** itself (they fire the watcher event after stubbing the post-state). A useful addition: a test per Step D domain that asserts `mutateAsync` actually fires the right `gitApi.*` call with the right args. The `__gitApiMock` helper has `expect(window.__gitApiMock.api.X).toHaveBeenCalledWith(...)`-style affordances; see `Toolbar.browser.test.tsx` for the existing pattern.
+`src/queries/mutations.browser.test.tsx` covers the three Step D domains via a tiny `MutationProbe` that mounts a `useMutation`, fires `mutateAsync` once, and asserts `window.__gitApiMock.api.X` was called with the expected input:
+
+- `stageMutation` → `gitApi.stage(files)`
+- `commitMutation` → `gitApi.commit(opts)`
+- `checkoutMutation` → `gitApi.checkout(branch)`
+
+The probe avoids walking through the UI's per-domain enabling logic (`canCommit`, branch dropdown, etc.) so the test stays focused on the mutation→IPC wiring. The inverse leg (REPO_CHANGED → cache refetch) remains covered in `ChangesPanel.browser.test.tsx`, `BranchGraph.browser.test.tsx`, and `stores/repo.browser.test.tsx`.
 
 ## How to verify each follow-up
 

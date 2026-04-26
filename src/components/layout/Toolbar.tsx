@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useRepo, useActiveTabShallow } from "../../stores/repo";
+import { useRepo, useActivePath } from "../../stores/repo";
 import { useUI } from "../../stores/ui";
 import { useSettings } from "../../stores/settings";
 import { unwrap } from "../../lib/ipc";
@@ -42,10 +42,10 @@ type PullStrategy = "merge" | "rebase" | "ff-only";
 // Toolbar layout: repo + branch selectors on the left, two button groups
 // in the middle (history + sync / workflow), utilities on the right.
 export function Toolbar() {
-  const { path, backgroundFetching } = useActiveTabShallow((t) => ({
-    path: t?.path ?? null,
-    backgroundFetching: t?.backgroundFetching ?? false,
-  }));
+  const path = useActivePath();
+  const backgroundFetching = useRepo(
+    (s) => s.tabs[s.activeIdx]?.backgroundFetching ?? false,
+  );
   const status = useQuery(gitStatusOptions(path)).data ?? null;
   const branches = useQuery(gitBranchesOptions(path)).data ?? [];
   const undo =
@@ -311,7 +311,7 @@ export function Toolbar() {
 // Repo selector — the top-left "repository" pill. Clicking it opens a menu
 // with recent repos + an "open" button.
 function RepoSelector() {
-  const path = useActiveTabShallow((t) => t?.path ?? null);
+  const path = useActivePath();
   const openRepo = useRepo((s) => s.openRepo);
   const toast = useUI((s) => s.toast);
   const [recents, setRecents] = useState<string[]>([]);
@@ -398,7 +398,7 @@ function BranchSelector({
   currentBranch: string | null;
   disabled?: boolean;
 }) {
-  const activePath = useActiveTabShallow((t) => t?.path ?? null);
+  const activePath = useActivePath();
   const checkoutMut = useMutation(checkoutMutation(activePath ?? ""));
   const toast = useUI((s) => s.toast);
   const [filter, setFilter] = useState("");

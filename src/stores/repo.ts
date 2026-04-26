@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { useShallow } from "zustand/react/shallow";
 import { unwrap, maybe } from "../lib/ipc";
 import { useUI } from "./ui";
 
@@ -151,8 +150,11 @@ export function useActiveTab(): TabData | null {
   return useRepo((s) => s.tabs[s.activeIdx] ?? null);
 }
 
-// Shallow-equality selector for reading multiple fields off the active tab.
-// Mostly useful for grabbing path + a UI flag in one render.
-export function useActiveTabShallow<T>(picker: (t: TabData | null) => T): T {
-  return useRepo(useShallow((s) => picker(s.tabs[s.activeIdx] ?? null)));
+// The active tab's path or null. Primitive return so default identity
+// equality is enough — no useShallow needed. Prefer this over
+// `useActiveTab()?.path` when only the path is needed; `useActiveTab`
+// re-renders on every field patch (behindRemote, backgroundFetching),
+// `useActivePath` only re-renders when the path itself changes.
+export function useActivePath(): string | null {
+  return useRepo((s) => s.tabs[s.activeIdx]?.path ?? null);
 }

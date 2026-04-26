@@ -69,10 +69,11 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
     GIT.DIFF,
     (
       _e,
+      repoPath: string,
       payload: { file: string; staged?: boolean; commitA?: string; commitB?: string },
     ) =>
       wrap(async (): Promise<FileDiff> => {
-        const raw = await exec(repo).diff(payload.file, {
+        const raw = await exec(repo, repoPath).diff(payload.file, {
           staged: payload.staged,
           commitA: payload.commitA,
           commitB: payload.commitB,
@@ -166,11 +167,16 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
       wrap(() => exec(repo).remoteSetUrl(name, url, push)),
   );
 
-  ipc.handle(GIT.CONFIG_LIST, () => wrap(() => exec(repo).configList()));
+  ipc.handle(GIT.CONFIG_LIST, (_e, repoPath: string) =>
+    wrap(() => exec(repo, repoPath).configList()),
+  );
   ipc.handle(
     GIT.CONFIG_GET,
-    (_e, { key, scope }: { key: string; scope?: "local" | "global" | "system" }) =>
-      wrap(() => exec(repo).configGet(key, scope)),
+    (
+      _e,
+      repoPath: string,
+      { key, scope }: { key: string; scope?: "local" | "global" | "system" },
+    ) => wrap(() => exec(repo, repoPath).configGet(key, scope)),
   );
   ipc.handle(
     GIT.CONFIG_SET,
@@ -178,17 +184,21 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
       wrap(() => exec(repo).configSet(key, value, scope)),
   );
 
-  ipc.handle(GIT.FILE_AT_REF, (_e, { ref, path: p }: { ref: string; path: string }) =>
-    wrap(() => exec(repo).fileAtRef(ref, p)),
+  ipc.handle(
+    GIT.FILE_AT_REF,
+    (_e, repoPath: string, { ref, path: p }: { ref: string; path: string }) =>
+      wrap(() => exec(repo, repoPath).fileAtRef(ref, p)),
   );
   ipc.handle(
     GIT.WRITE_FILE,
     (_e, { path: p, content }: { path: string; content: string }) =>
       wrap(() => exec(repo).writeFile(p, content)),
   );
-  ipc.handle(GIT.MERGE_MESSAGE, () => wrap(() => exec(repo).mergeMessage()));
-  ipc.handle(GIT.CONFLICT_KIND, (_e, p: string) =>
-    wrap(() => exec(repo).conflictKind(p)),
+  ipc.handle(GIT.MERGE_MESSAGE, (_e, repoPath: string) =>
+    wrap(() => exec(repo, repoPath).mergeMessage()),
+  );
+  ipc.handle(GIT.CONFLICT_KIND, (_e, repoPath: string, p: string) =>
+    wrap(() => exec(repo, repoPath).conflictKind(p)),
   );
   ipc.handle(
     GIT.RESOLVE_SIDE,
@@ -200,8 +210,11 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   );
   ipc.handle(
     GIT.FIND_RENAME_TARGET,
-    (_e, { path: p, side }: { path: string; side: "ours" | "theirs" }) =>
-      wrap(() => exec(repo).findRenameTarget(p, side)),
+    (
+      _e,
+      repoPath: string,
+      { path: p, side }: { path: string; side: "ours" | "theirs" },
+    ) => wrap(() => exec(repo, repoPath).findRenameTarget(p, side)),
   );
 
   ipc.handle(GIT.STASH_LIST, (_e, repoPath: string) =>
@@ -209,9 +222,11 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
   );
   ipc.handle(GIT.STASH_APPLY, (_e, index: number) => wrap(() => exec(repo).stashApply(index)));
   ipc.handle(GIT.STASH_DROP, (_e, index: number) => wrap(() => exec(repo).stashDrop(index)));
-  ipc.handle(GIT.STASH_SHOW, (_e, index: number) => wrap(() => exec(repo).stashShow(index)));
-  ipc.handle(GIT.STASH_SHOW_FILES, (_e, index: number) =>
-    wrap(() => exec(repo).stashShowFiles(index)),
+  ipc.handle(GIT.STASH_SHOW, (_e, repoPath: string, index: number) =>
+    wrap(() => exec(repo, repoPath).stashShow(index)),
+  );
+  ipc.handle(GIT.STASH_SHOW_FILES, (_e, repoPath: string, index: number) =>
+    wrap(() => exec(repo, repoPath).stashShowFiles(index)),
   );
 
   ipc.handle(GIT.TAGS, (_e, repoPath: string) =>
@@ -248,7 +263,9 @@ export function registerGitHandlers(ipc: IpcMain, repo: RepoManager) {
     wrap(() => exec(repo).worktreeUnlock(p)),
   );
 
-  ipc.handle(GIT.COMMIT_FILES, (_e, hash: string) => wrap(() => exec(repo).commitFiles(hash)));
+  ipc.handle(GIT.COMMIT_FILES, (_e, repoPath: string, hash: string) =>
+    wrap(() => exec(repo, repoPath).commitFiles(hash)),
+  );
 
   ipc.handle(GIT.UNDO_HEAD, () => wrap(() => repo.require().headUndo()));
   ipc.handle(GIT.REDO_HEAD, () => wrap(() => repo.require().headRedo()));
