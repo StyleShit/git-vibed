@@ -37,6 +37,18 @@ An experimental, 100% vibe-coded Git GUI built with Electron and React. Handles 
 | Merge | node-diff3 |
 | Editor | Monaco Editor |
 
+## Install
+
+Prebuilt installers are attached to each [release](https://github.com/StyleShit/git-vibed/releases).
+
+**macOS** — the app is not code-signed, so Gatekeeper will block it on first launch with "Apple could not verify…". After dragging the app to `/Applications`, run:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Git Vibed.app"
+```
+
+Or, after the failed launch, go to System Settings → Privacy & Security and click "Open Anyway".
+
 ## Requirements
 
 - Node.js ≥ 20

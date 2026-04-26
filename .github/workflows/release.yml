@@ -100,7 +100,15 @@ jobs:
           tag_name: ${{ needs.version.outputs.tag }}
           name: Git Vibed v${{ needs.version.outputs.version }}
           body: |
-            Automated build from ${{ github.sha }}.
+            ### Installation
+
+            **macOS** — the app is not code-signed. After dragging it to `/Applications`, run:
+
+            ```sh
+            xattr -dr com.apple.quarantine "/Applications/Git Vibed.app"
+            ```
+
+            Or open System Settings → Privacy & Security → "Open Anyway" after the first failed launch.
           files: artifacts/*
           fail_on_unmatched_files: false
           generate_release_notes: true
