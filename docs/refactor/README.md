@@ -36,6 +36,7 @@
 | 02  | Done        | 2026-04-23 | d81f529 | [02-vitest-setup-and-smoke-tests.md](02-vitest-setup-and-smoke-tests.md) | "vitest", "tests", "smoke tests", "test setup"                             |
 | 03  | Done        | 2026-04-23 | ef3d867 | [03-tanstack-query-plan.md](03-tanstack-query-plan.md)                   | "tanstack query plan", "react query plan", "query migration plan"          |
 | 03a | Done        | 2026-04-24 | 0f8c6bc | [03a-tanstack-query-execution.md](03a-tanstack-query-execution.md)       | "tanstack query execution", "query migration", "refreshAll to invalidate" |
+| 03b | Not started | —          | —       | [03b-tanstack-query-followups.md](03b-tanstack-query-followups.md)       | "tanstack query follow-ups", "detail view queries", "remaining read IPCs" |
 | 04  | Not started | —          | —       | [04-decompose-merge-editor.md](04-decompose-merge-editor.md)             | "decompose merge editor", "split merge editor", "merge editor refactor"    |
 | 05  | Not started | —          | —       | [05-decompose-branch-graph.md](05-decompose-branch-graph.md)             | "decompose branch graph", "split branch graph", "graph refactor"           |
 | 06  | Not started | —          | —       | [06-decompose-changes-panel.md](06-decompose-changes-panel.md)           | "decompose changes panel", "split changes panel", "staging panel refactor" |
